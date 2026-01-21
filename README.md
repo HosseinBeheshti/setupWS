@@ -3,7 +3,7 @@
 This guide provides complete step-by-step instructions for deploying **Cloudflare Zero Trust Network Access (ZTNA)** on your VPS with dual-tier access control:
 
 - **Admin Tier:** SSH, VNC, and VPN management access with TOTP 2FA + device posture checks
-- **User Tier:** WireGuard VPN for secure traffic routing through VPS with Shadowsocks backup for Iran filtering bypass
+- **User Tier:** WireGuard VPN for secure traffic routing through VPS
 
 ## Table of Contents
 
@@ -13,10 +13,9 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 - [Part 2: VPS Server Setup](#part-2-vps-server-setup)
 - [Part 3: Admin Access Configuration](#part-3-admin-access-configuration)
 - [Part 4: User Access with WireGuard](#part-4-user-access-with-wireguard)
-- [Part 5: Shadowsocks Bypass (Iran)](#part-5-shadowsocks-bypass-iran)
-- [Part 6: Admin Workflows](#part-6-admin-workflows)
-- [Part 7: Backup & Recovery](#part-7-backup--recovery)
-- [Part 8: Monitoring & Troubleshooting](#part-8-monitoring--troubleshooting)
+- [Part 5: Admin Workflows](#part-5-admin-workflows)
+- [Part 6: Backup & Recovery](#part-6-backup--recovery)
+- [Part 7: Monitoring & Troubleshooting](#part-7-monitoring--troubleshooting)
 
 ---
 
@@ -40,15 +39,11 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         USER ACCESS TIER                             │
 │                                                                       │
-│  User Devices (Iran/Censored Regions)                               │
+│  User Devices                                                        │
 │         │                                                             │
-│         ├─► Primary Path: WireGuard Client                          │
-│         │        └─► VPS WireGuard Server (port 51820/udp)          │
-│         │                  └─► Internet via VPS                      │
-│         │                                                             │
-│         └─► Backup Path: Shadowsocks Client                         │
-│                  └─► VPS Shadowsocks Server (port 443/tcp)          │
-│                           └─► Internet via VPS (DPI-resistant)       │
+│         └─► WireGuard Client                                         │
+│                  └─► VPS WireGuard Server (port 51820/udp)          │
+│                           └─► Internet via VPS                       │
 │                                                                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -58,7 +53,7 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 - **Zero Trust Security:** All access requires authentication + device verification
 - **TOTP 2FA:** Time-based one-time passwords (Google Authenticator/Authy)
 - **Device Posture Checks:** Only registered devices with WARP client can access
-- **Dual Bypass Methods:** WireGuard for performance + Shadowsocks for censorship resistance
+- **WireGuard VPN:** High-performance VPN for secure traffic routing
 - **Automated Management:** Scripts for user provisioning, monitoring, and backups
 - **SQLite Database:** Track users, devices, and connections
 
@@ -72,7 +67,7 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 - **Minimum:** 2 CPU cores, 4GB RAM, 50GB storage
 - **Root or sudo access**
 - **Public IP address**
-- **Open ports:** 22 (SSH), 443 (Shadowsocks), 51820 (WireGuard)
+- **Open ports:** 22 (SSH), 51820 (WireGuard)
 
 ### Cloudflare Requirements
 
@@ -89,7 +84,6 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 
 **For Users:**
 - **WireGuard client** (Windows, macOS, Linux, iOS, Android)
-- **Shadowsocks client** (backup): Shadowsocks Android, ShadowsocksX-NG, etc.
 
 ---
 
@@ -285,11 +279,6 @@ CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiMTIzNC..." # Token from Step 1.3
 CLOUDFLARE_DOMAIN="yourdomain.com"
 CLOUDFLARE_ZONE_ID="your-zone-id"
 
-# Shadowsocks Configuration (Iran Bypass)
-SS_PASSWORD="YourStrongShadowsocksPassword456!"
-SS_METHOD="chacha20-ietf-poly1305"
-SS_PORT="8388"  # Internal port, exposed as 443
-
 # WireGuard Configuration
 WG_SERVER_PUBLIC_IP="your.vps.public.ip"
 WG_PORT="51820"
@@ -345,7 +334,7 @@ sudo ./setup_server.sh
 - Installs Docker, Docker Compose, `cloudflared`, `qrencode`, `sqlite3`
 - Creates directory structure (`/etc/cloudflare/`, `/var/lib/ztna/`, `/etc/wireguard/`)
 - Initializes SQLite database with schema
-- Deploys Docker containers (Shadowsocks, WireGuard, cloudflared)
+- Deploys Docker containers (WireGuard, cloudflared)
 - Configures UFW firewall rules
 - Sets up VNC users and virtual router (existing functionality)
 - Starts all services
@@ -363,7 +352,6 @@ docker ps
 Expected output:
 ```
 CONTAINER ID   IMAGE                              STATUS
-abc123def456   shadowsocks/shadowsocks-rust       Up 2 minutes
 def789ghi012   linuxserver/wireguard              Up 2 minutes
 ghi345jkl678   cloudflare/cloudflared:latest      Up 2 minutes
 ```
@@ -618,162 +606,7 @@ sudo ./query_users.sh
 
 ---
 
-## Part 5: Shadowsocks Bypass (Iran)
-
-Shadowsocks provides a backup connection method optimized for DPI (Deep Packet Inspection) resistance in censored regions like Iran.
-
-### Step 5.1: Verify Shadowsocks Server
-
-Check that Shadowsocks container is running:
-
-```bash
-docker ps | grep shadowsocks
-```
-
-Check logs:
-```bash
-docker logs shadowsocks
-```
-
-Expected output:
-```
-Shadowsocks-rust listening on 0.0.0.0:8388
-Using method: chacha20-ietf-poly1305
-```
-
-### Step 5.2: Client Configuration
-
-**Connection Details:**
-```
-Server: your.vps.public.ip
-Port: 443
-Password: YourStrongShadowsocksPassword456!
-Encryption: chacha20-ietf-poly1305
-Plugin: (none)
-```
-
-**JSON Configuration:**
-```json
-{
-  "server": "your.vps.public.ip",
-  "server_port": 443,
-  "password": "YourStrongShadowsocksPassword456!",
-  "method": "chacha20-ietf-poly1305",
-  "timeout": 300
-}
-```
-
-### Step 5.3: Install Shadowsocks Clients
-
-**On Windows:**
-1. Download: https://github.com/shadowsocks/shadowsocks-windows/releases
-2. Extract `Shadowsocks.exe`
-3. Run → **Servers** → **Edit Servers**
-4. Add server details
-5. Click **OK** → **Enable System Proxy**
-
-**On macOS:**
-1. Download ShadowsocksX-NG: https://github.com/shadowsocks/ShadowsocksX-NG/releases
-2. Open → **Servers** → **Server Preferences**
-3. Click **+** to add server
-4. Enable "SOCKS5 Proxy"
-
-**On Android:**
-1. Install "Shadowsocks" from Play Store (or F-Droid)
-2. Open app → **+** → **Manual Settings**
-3. Enter server details
-4. Tap connect
-
-**On iOS:**
-1. Install "Shadowrocket" from App Store (paid, $2.99)
-2. Alternative: "Potatso Lite" (free)
-3. Add server configuration
-4. Connect
-
-**On Linux:**
-```bash
-# Install shadowsocks-libev
-sudo apt install shadowsocks-libev
-
-# Create config file
-sudo vim /etc/shadowsocks-libev/config.json
-```
-
-```json
-{
-  "server": "your.vps.public.ip",
-  "server_port": 443,
-  "local_port": 1080,
-  "password": "YourStrongShadowsocksPassword456!",
-  "timeout": 300,
-  "method": "chacha20-ietf-poly1305"
-}
-```
-
-```bash
-# Start service
-sudo systemctl start shadowsocks-libev-local
-sudo systemctl enable shadowsocks-libev-local
-
-# Configure system proxy
-export http_proxy=socks5://127.0.0.1:1080
-export https_proxy=socks5://127.0.0.1:1080
-```
-
-### Step 5.4: Test Connection
-
-**Verify bypass is working:**
-
-```bash
-# Check your IP (should show VPS IP)
-curl --proxy socks5://127.0.0.1:1080 ifconfig.me
-
-# Test HTTPS websites
-curl --proxy socks5://127.0.0.1:1080 https://www.google.com
-
-# DNS leak test
-curl --proxy socks5://127.0.0.1:1080 https://www.dnsleaktest.com
-```
-
-### Step 5.5: Troubleshooting Iran Blocking
-
-If Shadowsocks gets blocked:
-
-1. **Change port (if 443 is detected):**
-   ```bash
-   # Edit docker-compose-ztna.yml
-   vim /root/setupWS/docker-compose-ztna.yml
-   
-   # Change port mapping:
-   ports:
-     - "8443:8388/tcp"  # Use 8443 instead of 443
-   
-   # Restart container
-   docker-compose -f docker-compose-ztna.yml restart shadowsocks
-   
-   # Update firewall
-   sudo ufw allow 8443/tcp
-   ```
-
-2. **Use plugin (obfuscation):**
-   
-   Add v2ray-plugin for additional obfuscation:
-   ```bash
-   # Update docker-compose-ztna.yml
-   services:
-     shadowsocks:
-       command: ssserver -s 0.0.0.0 -p 8388 -k "${SS_PASSWORD}" -m ${SS_METHOD} --plugin v2ray-plugin --plugin-opts "server"
-   ```
-
-3. **Enable Cloudflare CDN proxy:**
-   - Create A record for `ss.yourdomain.com` pointing to VPS IP
-   - Enable Cloudflare proxy (orange cloud)
-   - Update client to use `ss.yourdomain.com:443`
-   - Traffic appears as HTTPS to CloudFlare
-
----
-
-## Part 6: Admin Workflows
+## Part 5: Admin Workflows
 
 ### Workflow 1: Add New WireGuard User
 
@@ -890,7 +723,7 @@ sudo ./query_users.sh
 
 ---
 
-## Part 7: Backup & Recovery
+## Part 6: Backup & Recovery
 
 ### Automated Backups
 
@@ -986,7 +819,7 @@ rclone config
 
 ---
 
-## Part 8: Monitoring & Troubleshooting
+## Part 7: Monitoring & Troubleshooting
 
 ### Health Checks
 
@@ -1119,52 +952,7 @@ sudo wg show
    sudo iptables -t nat -A POSTROUTING -s 10.13.13.0/24 -o eth0 -j MASQUERADE
    ```
 
-#### Issue 3: Shadowsocks Blocked in Iran
-
-**Symptoms:**
-- Connection times out
-- Works from other countries but not Iran
-
-**Solutions:**
-
-1. **Change to port 443 (HTTPS):**
-   ```bash
-   # Already using 443, but verify:
-   docker ps | grep shadowsocks
-   # Should show: 0.0.0.0:443->8388/tcp
-   ```
-
-2. **Enable Cloudflare CDN proxy:**
-   - Cloudflare Dashboard → DNS
-   - Add A record: `ss.yourdomain.com` → VPS IP
-   - Enable proxy (orange cloud icon)
-   - Update client to use `ss.yourdomain.com:443`
-
-3. **Add v2ray-plugin obfuscation:**
-   ```bash
-   # Edit docker-compose-ztna.yml
-   vim /root/setupWS/docker-compose-ztna.yml
-   
-   # Update shadowsocks service:
-   services:
-     shadowsocks:
-       image: teddysun/shadowsocks-rust
-       command: >
-         ssserver 
-         -s 0.0.0.0 
-         -p 8388 
-         -k "${SS_PASSWORD}" 
-         -m ${SS_METHOD}
-         --plugin v2ray-plugin
-         --plugin-opts "server"
-   
-   # Restart
-   docker-compose -f docker-compose-ztna.yml restart shadowsocks
-   
-   # Update client to use v2ray-plugin
-   ```
-
-#### Issue 4: Can't Access VNC After 2FA
+#### Issue 3: Can't Access VNC After 2FA
 
 **Symptoms:**
 - TOTP code accepted

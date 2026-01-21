@@ -50,7 +50,7 @@ done
 # --- Main Execution ---
 print_header "Starting Secure Remote Desktop Gateway Setup"
 
-# Step 0: Setup ZTNA Infrastructure (Cloudflare, Docker, WireGuard, Shadowsocks)
+# Step 0: Setup ZTNA Infrastructure (Cloudflare, Docker, WireGuard)
 print_header "Step 0/5: Setting up ZTNA Infrastructure"
 
 print_message "Installing required packages..."
@@ -147,7 +147,6 @@ print_message "✓ IP forwarding enabled"
 print_message "Configuring firewall..."
 ufw --force enable
 ufw allow 22/tcp comment 'SSH'
-ufw allow 443/tcp comment 'Shadowsocks'
 ufw allow 51820/udp comment 'WireGuard'
 print_message "✓ Firewall configured"
 
@@ -161,13 +160,6 @@ if [[ -f "./docker-compose-ztna.yml" ]]; then
         print_warning "  docker-compose -f docker-compose-ztna.yml up -d cloudflared"
     fi
     
-    # Check if SS_PASSWORD is set
-    if [[ -z "$SS_PASSWORD" ]]; then
-        print_warning "SS_PASSWORD not set in workstation.env"
-        print_warning "Using default password (change this!)"
-        export SS_PASSWORD="ChangeThisPassword123!"
-    fi
-    
     docker-compose -f docker-compose-ztna.yml up -d
     print_message "✓ Docker services started"
     
@@ -175,12 +167,6 @@ if [[ -f "./docker-compose-ztna.yml" ]]; then
     sleep 5
     
     # Check container status
-    if docker ps | grep -q shadowsocks; then
-        print_message "✓ Shadowsocks container running"
-    else
-        print_warning "Shadowsocks container not running, check logs: docker logs shadowsocks"
-    fi
-    
     if docker ps | grep -q wireguard; then
         print_message "✓ WireGuard container running"
     else
@@ -274,7 +260,7 @@ print_header "Setup Complete!"
 echo -e "${GREEN}All components have been successfully installed and configured!${NC}\n"
 
 echo -e "${YELLOW}Summary:${NC}"
-echo -e "  ✓ ZTNA Infrastructure (Cloudflare Tunnel, WireGuard, Shadowsocks)"
+echo -e "  ✓ ZTNA Infrastructure (Cloudflare Tunnel, WireGuard)"
 echo -e "  ✓ VNC Server with users"
 echo -e "  ✓ Virtual Router for VPN traffic"
 if [[ " $VPN_LIST " =~ " l2tp " ]]; then
@@ -289,7 +275,6 @@ echo ""
 # Display ZTNA information
 echo -e "${YELLOW}ZTNA Services:${NC}"
 echo -e "-----------------------------------------------------"
-echo -e "  ${GREEN}Shadowsocks:${NC}       Port 443/tcp (DPI-resistant)"
 echo -e "  ${GREEN}WireGuard:${NC}         Port ${WG_PORT:-51820}/udp"
 echo -e "  ${GREEN}Cloudflare Tunnel:${NC} Dynamic port (access via CF Access)"
 echo -e "  ${GREEN}Database:${NC}          $DB_PATH"
@@ -338,7 +323,7 @@ echo ""
 echo -e "4. ${BLUE}Monitoring:${NC}"
 echo -e "   - Docker status: docker ps"
 echo -e "   - WireGuard peers: sudo wg show"
-echo -e "   - Logs: docker logs shadowsocks | wireguard | cloudflared"
+echo -e "   - Logs: docker logs wireguard | cloudflared"
 echo ""
 echo -e "5. ${BLUE}Backups:${NC}"
 echo -e "   - Automated daily at 2 AM to: /var/lib/ztna/backups/"

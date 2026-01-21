@@ -2,44 +2,10 @@ version: '3.8'
 
 ################################################################################
 # Cloudflare Zero Trust Network Access (ZTNA) Stack
-# Services: Shadowsocks, WireGuard, Cloudflare Tunnel
+# Services: WireGuard, Cloudflare Tunnel
 ################################################################################
 
 services:
-  # Shadowsocks - Iran bypass & DPI resistance
-  shadowsocks:
-    image: shadowsocks/shadowsocks-rust:latest
-    container_name: shadowsocks
-    restart: always
-    ports:
-      - "443:8388/tcp"  # External 443 -> Internal 8388
-    environment:
-      - SERVER_ADDR=0.0.0.0:8388
-      - METHOD=${SS_METHOD:-chacha20-ietf-poly1305}
-      - PASSWORD=${SS_PASSWORD}
-      - TIMEOUT=300
-      - DNS_ADDRS=1.1.1.1,1.0.0.1
-    command: >
-      ssserver
-      -s 0.0.0.0
-      -p 8388
-      -k "${SS_PASSWORD}"
-      -m ${SS_METHOD:-chacha20-ietf-poly1305}
-      --fast-open
-      --no-delay
-    networks:
-      - ztna_network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    healthcheck:
-      test: ["CMD-SHELL", "ss -tulpn | grep 8388 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
   # WireGuard - VPN server for user traffic routing
   wireguard:
     image: linuxserver/wireguard:latest
