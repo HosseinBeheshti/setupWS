@@ -185,7 +185,35 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    - Select **Next**
    - Your tunnel should show **Healthy** status once the connector runs on your VPS
 
-### Step 1.4: Create Access Applications & Policies
+### Step 1.4: Enable Device Posture Checks
+
+**Important:** Complete this step BEFORE creating Access applications so posture checks are available in policies.
+
+1. **Enable the WARP posture check:**
+   - Go to **Reusable components** → **Posture checks**
+   - In **WARP client checks** section, select **Add a check**
+   - Select **WARP** (to allow any WARP client including consumer version)
+   - OR select **Gateway** (to require Zero Trust enrolled devices only - recommended)
+   - Click **Save**
+
+2. **Configure device enrollment permissions:**
+   - Go to **Settings** → **Devices** → **Device enrollment permissions**
+   - Add enrollment rule:
+     - **Allow** users from **Emails ending in**: `@yourdomain.com`
+     - Or select **Specific emails** and list admin emails
+   - Click **Save**
+
+3. **Optional: Create additional posture checks:**
+   - Go to **Reusable components** → **Posture checks**
+   - Add more checks as needed:
+     - **OS version** - Require specific operating system versions
+     - **Firewall** - Require firewall to be enabled
+     - **Disk encryption** - Require encrypted disks
+     - **Application check** - Require specific applications installed
+
+### Step 1.5: Create Access Applications & Policies
+
+Now that posture checks are enabled, you can use them in Access policies.
 
 #### SSH Access Application
 
@@ -216,8 +244,8 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    - Value: `hossein@yourdomain.com, admin@yourdomain.com`
    
    **Require rules:**
-   - **Login Methods**: One-time PIN
-   - **Device posture**: WARP (add after enabling posture checks)
+   - Selector: **Login Methods** → Value: `One-time PIN`
+   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
 
 5. **Configure identity providers:**
    - Select your identity provider (One-time PIN or enterprise IdP)
@@ -236,42 +264,17 @@ Repeat the above steps for each VNC service:
 **VNC - Hossein:**
 - Application name: `VNC - Hossein`
 - Domain: `vnc-hossein.yourdomain.com`
-- Same policy: Allow admins with OTP + WARP
+- Same policy: Allow admins with OTP + WARP/Gateway
 
 **VNC - Asal:**
 - Application name: `VNC - Asal`
 - Domain: `vnc-asal.yourdomain.com`
-- Same policy: Allow admins with OTP + WARP
+- Same policy: Allow admins with OTP + WARP/Gateway
 
 **VNC - Hassan:**
 - Application name: `VNC - Hassan`
 - Domain: `vnc-hassan.yourdomain.com`
-- Same policy: Allow admins with OTP + WARP
-
-### Step 1.5: Enable Device Posture Checks
-
-1. **Enable WARP device posture:**
-   - Go to **Settings** → **WARP Client**
-   - Enable **Device posture** checks
-
-2. **Configure device enrollment:**
-   - Go to **Settings** → **Devices** → **Device enrollment permissions**
-   - Add enrollment rule:
-     - **Allow** users from **Emails ending in**: `@yourdomain.com`
-     - Or select **Specific emails** and list admin emails
-
-3. **Create posture checks (optional):**
-   - Go to **Settings** → **WARP Client** → **Device posture**
-   - Add checks for:
-     - Specific OS versions
-     - Firewall enabled
-     - Disk encryption
-     - Application presence
-
-4. **Update Access policies:**
-   - Return to each Access application
-   - Edit policies to include **Device posture** requirements
-   - Select the WARP posture check in Require rules
+- Same policy: Allow admins with OTP + WARP/Gateway
 
 ---
 
