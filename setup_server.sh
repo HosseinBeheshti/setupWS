@@ -110,6 +110,8 @@ if docker ps &> /dev/null; then
 else
     print_error "Docker installation failed or service not running"
     print_message "Attempting to fix Docker service..."
+    systemctl daemon-reload
+    systemctl restart docker.socket
     systemctl restart docker
     sleep 5
     if ! docker ps &> /dev/null; then
@@ -211,6 +213,13 @@ if [[ -f "./docker-compose-ztna.yml" ]]; then
         print_warning "Cloudflare tunnel will not start. Set token and run:"
         print_warning "  docker compose -f docker-compose-ztna.yml up -d cloudflared"
     fi
+    
+    # Export environment variables for docker compose
+    export CLOUDFLARE_TUNNEL_TOKEN
+    export WG_SERVER_PUBLIC_IP
+    export WG_PORT
+    export WG_SUBNET
+    export WG_DNS
     
     # Use 'docker compose' (v2) instead of 'docker-compose' (v1)
     docker compose -f docker-compose-ztna.yml up -d
