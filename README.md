@@ -197,10 +197,13 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    - Click **Save**
 
 2. **Configure device enrollment permissions:**
-   - Go to **Settings** → **Devices** → **Device enrollment permissions**
-   - Add enrollment rule:
-     - **Allow** users from **Emails ending in**: `@yourdomain.com`
-     - Or select **Specific emails** and list admin emails
+   - Go to **Team & Resources** → **Devices** → **Device profiles** → **Management**
+   - In **Device enrollment**, select **Manage**
+   - In the **Policies** tab, configure an Access policy:
+     - Action: **Allow**
+     - Include rule: **Emails ending in** → `@yourdomain.com`
+     - Or use **Emails** selector to list specific admin emails
+   - In the **Login methods** tab, select your identity provider (One-time PIN or enterprise IdP)
    - Click **Save**
 
 3. **Optional: Create additional posture checks:**
