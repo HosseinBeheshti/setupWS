@@ -233,12 +233,15 @@ Now that posture checks are enabled, you can use them in Access policies.
    - Domain: `ssh.autoazma.ir`
    - Click **Next**
 
-   - Click **Save**
+4. **Apply the Admin Policy:**
+   - In the **Policies** tab, select **Add a policy**
+   - Select **Admin Policy** from the existing policies dropdown
+   - Click **Next**
 
-7. **Verify application:**
-   - Go to **Access controls** → **Applications**
-   - Your "Admin SSH Access" should now be listed
-   - You can click **Configure** to edit it later
+5. **Finalize settings:**
+   - Configure App Launcher visibility (optional)
+   - Set block page behavior
+   - Click **Save**
 
 #### VNC Access Application - Hossein
 
@@ -258,26 +261,12 @@ Now that posture checks are enabled, you can use them in Access policies.
    - Domain: `vnc-hossein.autoazma.ir`
    - Click **Next**
 
-4. **Configure Access policy:**
-   ```
-   Policy name: VNC Hossein Policy
-   Action: Allow
-   ```
-   
-   **Include rule:**
-   - Selector: **Emails**
-   - Value: `h.beheshti92@gmail.com` (or add other admin emails)
-   
-   **Require rules:**
-   - Selector: **Login Methods** → Value: `One-time PIN`
-   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
-
-5. **Configure identity providers:**
-   - Select your identity provider (One-time PIN or enterprise IdP)
-   - Enable **Instant Auth** if using single IdP
+4. **Apply the Admin Policy:**
+   - In the **Policies** tab, select **Add a policy**
+   - Select **Admin Policy** from the existing policies dropdown
    - Click **Next**
 
-6. **Finalize settings:**
+5. **Finalize settings:**
    - Under **Experience settings**, select **Show application in App Launcher** (optional)
    - Set block page behavior
    - Click **Save**
@@ -300,26 +289,12 @@ Now that posture checks are enabled, you can use them in Access policies.
    - Domain: `vnc-asal.autoazma.ir`
    - Click **Next**
 
-4. **Configure Access policy:**
-   ```
-   Policy name: VNC Asal Policy
-   Action: Allow
-   ```
-   
-   **Include rule:**
-   - Selector: **Emails**
-   - Value: `asal@autoazma.ir, h.beheshti92@gmail.com` (add authorized users)
-   
-   **Require rules:**
-   - Selector: **Login Methods** → Value: `One-time PIN`
-   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
-
-5. **Configure identity providers:**
-   - Select your identity provider (One-time PIN or enterprise IdP)
-   - Enable **Instant Auth** if using single IdP
+4. **Apply the Admin Policy:**
+   - In the **Policies** tab, select **Add a policy**
+   - Select **Admin Policy** from the existing policies dropdown
    - Click **Next**
 
-6. **Finalize settings:**
+5. **Finalize settings:**
    - Under **Experience settings**, select **Show application in App Launcher** (optional)
    - Set block page behavior
    - Click **Save**
@@ -342,26 +317,12 @@ Now that posture checks are enabled, you can use them in Access policies.
    - Domain: `vnc-hassan.autoazma.ir`
    - Click **Next**
 
-4. **Configure Access policy:**
-   ```
-   Policy name: VNC Hassan Policy
-   Action: Allow
-   ```
-   
-   **Include rule:**
-   - Selector: **Emails**
-   - Value: `hassan@autoazma.ir, h.beheshti92@gmail.com` (add authorized users)
-   
-   **Require rules:**
-   - Selector: **Login Methods** → Value: `One-time PIN`
-   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
-
-5. **Configure identity providers:**
-   - Select your identity provider (One-time PIN or enterprise IdP)
-   - Enable **Instant Auth** if using single IdP
+4. **Apply the Admin Policy:**
+   - In the **Policies** tab, select **Add a policy**
+   - Select **Admin Policy** from the existing policies dropdown
    - Click **Next**
 
-6. **Finalize settings:**
+5. **Finalize settings:**
    - Under **Experience settings**, select **Show application in App Launcher** (optional)
    - Set block page behavior
    - Click **Save**
@@ -376,6 +337,7 @@ After creating all applications:
   - VNC - Asal
   - VNC - Hassan
 - Each should show status as **Active**
+- All should be using the same **Admin Policy**
 
 ---
 
