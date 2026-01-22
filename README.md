@@ -8,7 +8,10 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 - Authenticates user identity with 2FA
 - Checks device health (OS version, firewall, encryption)
 - Enforces corporate security policies
-- Controls access to WireGuard service (port 51820)
+- Controls access to WireGuard service (configurable UDP port)
+  - Default: 443/UDP (obfuscated for Iran - appears as HTTPS/QUIC)
+  - Alternatives: 53/UDP (DNS), 123/UDP (NTP), high ports (40000-50000)
+  - **Note:** Default 51820 is blocked in Iran
 
 **Layer 2: WireGuard VPN - ACTUAL VPN TUNNEL**
 - Provides secure VPN connection
@@ -26,7 +29,7 @@ It's an authentication/policy enforcement tool, NOT a VPN replacement.
 2. **WireGuard app** (user activates) - Provides VPN tunnel
 
 **If Cloudflare One Agent is not running or user fails authentication:**
-→ WireGuard connection to port 51820 is **BLOCKED** by Cloudflare Gateway
+→ WireGuard connection to configured port (default 443/UDP) is **BLOCKED** by Cloudflare Gateway
 
 ## Table of Contents
 
@@ -64,7 +67,7 @@ User Device - BOTH Apps Running Simultaneously:
 │  Status: Connected (runs in background)                      │
 │  ├─ User authenticated with 2FA: ✓                          │
 │  ├─ Device posture checks passed: ✓                         │
-│  └─ Grants permission to access port 51820                  │
+│  └─ Grants permission to access WireGuard port              │
 └──────────────────────────────────────────────────────────────┘
                          │
                          │ Authentication Active
@@ -73,7 +76,8 @@ User Device - BOTH Apps Running Simultaneously:
 │  Application 2: WireGuard Client                             │
 │  Purpose: VPN Tunnel                                         │
 │  Status: User clicks "Connect"                               │
-│  ├─ Connects to VPS port 51820 (allowed by Zero Trust)     │
+│  ├─ Connects to VPS port 443/UDP (allowed by Zero Trust)   │
+│  │  (Appears as HTTPS/QUIC traffic - obfuscated)           │
 │  ├─ Establishes encrypted tunnel                            │
 │  └─ Routes all internet via VPS                             │
 └──────────────────────────────────────────────────────────────┘
@@ -84,7 +88,7 @@ User Device - BOTH Apps Running Simultaneously:
 │              Cloudflare Gateway (Policy Enforcement)          │
 │                                                               │
 │  IF (Cloudflare One Agent authenticated + posture OK)       │
-│     THEN allow traffic to port 51820                         │
+│     THEN allow traffic to WireGuard port (443/UDP)          │
 │  ELSE block connection                                        │
 └──────────────────────────────────────────────────────────────┘
                          │
@@ -94,7 +98,7 @@ User Device - BOTH Apps Running Simultaneously:
         │  VPS Server (Your Infrastructure)  │
         │                                     │
         │  ┌──────────────────────────────┐  │
-        │  │ WireGuard Server (51820/UDP) │  │
+        │  │ WireGuard Server (443/UDP)   │  │
         │  │  - Accepts connections        │  │
         │  │  - Routes internet traffic    │  │
         │  └──────────────────────────────┘  │
@@ -114,7 +118,7 @@ User Device - BOTH Apps Running Simultaneously:
 
 **For WireGuard VPN:**
 ```
-Cloudflare One Agent (background) → 2FA Auth → Posture Check → Gateway Policy (Allow port 51820) → WireGuard Client (VPN tunnel) → Internet via VPS
+Cloudflare One Agent (background) → 2FA Auth → Posture Check → Gateway Policy (Allow WireGuard port) → WireGuard Client (VPN tunnel) → Internet via VPS
 ```
 
 **For SSH/VNC:**
@@ -197,7 +201,7 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 4. User opens WireGuard app and clicks "Connect"
    - Cloudflare Gateway checks: Is user authenticated?
-   - If YES → Allow connection to port 51820
+   - If YES → Allow connection to WireGuard port (configured in workstation.env, default 443/UDP)
    - If NO → Block connection
    
 5. WireGuard tunnel established
@@ -219,7 +223,7 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 - **Minimum:** 2 CPU cores, 4GB RAM, 50GB storage
 - **Root or sudo access**
 - **Public IP address**
-- **Open ports:** 22 (SSH), 51820 (WireGuard)
+- **Open ports:** 22 (SSH), 443 (WireGuard obfuscated as HTTPS/QUIC)
 
 ### Cloudflare Requirements
 
@@ -357,6 +361,15 @@ Create multiple posture checks for comprehensive security:
 
 This is the critical step that protects your WireGuard port with Zero Trust authentication.
 
+**⚠️ PORT CONFIGURATION**: The default WireGuard port in this setup is **443/UDP** (obfuscated for Iran). Update the policy below to match your configured `WG_PORT` in [workstation.env](workstation.env).
+
+**Port Options:**
+- **443/UDP** (recommended for Iran - appears as HTTPS/QUIC traffic)
+- **53/UDP** (DNS obfuscation)
+- **123/UDP** (NTP obfuscation)
+- High ports: 40000-50000/UDP
+- **Avoid 51820** (default WireGuard port, blocked in Iran)
+
 #### Step A: Enable Network Filtering
 
 **Navigation:** Cloudflare One Dashboard → **Traffic policies** → **Traffic settings**
@@ -413,7 +426,7 @@ Click **Save settings**
 | Selector | Operator | Value |
 |----------|----------|-------|
 | Destination IP | in | `<YOUR-VPS-IP>` (e.g., 65.109.210.232) |
-| **AND** Destination Port | is | 51820 |
+| **AND** Destination Port | is | **443** (or your configured WG_PORT) |
 | **AND** Protocol | is | UDP |
 
 **Identity Conditions:**
@@ -442,7 +455,7 @@ Click **Create policy**
 | Selector | Operator | Value |
 |----------|----------|-------|
 | Destination IP | in | `<YOUR-VPS-IP>` |
-| **AND** Destination Port | is | 51820 |
+| **AND** Destination Port | is | **443** (or your configured WG_PORT) |
 | **AND** Protocol | is | UDP |
 
 Click **Create policy**
@@ -578,7 +591,7 @@ Repeat for:
 
    # WireGuard Configuration
    WG_SERVER_PUBLIC_IP="65.109.210.232"  # Your VPS IP
-   WG_PORT="51820"
+   WG_PORT="443"  # Obfuscated port (443/UDP appears as HTTPS/QUIC)
    WG_SUBNET="10.13.13.0/24"
    WG_DNS="1.1.1.1,1.0.0.1"
 
@@ -894,7 +907,7 @@ sudo ./add_wg_peer.sh username
 
 3. **What happens:**
    - Cloudflare Gateway checks: Is this user authenticated?
-   - If YES → Allows WireGuard connection to port 51820
+   - If YES → Allows WireGuard connection to configured port (default 443/UDP)
    - If NO → Blocks connection
    - WireGuard establishes VPN tunnel
    - All your internet traffic now routes through VPS
@@ -931,7 +944,7 @@ curl https://www.google.com
 
 3. **Check Gateway logs:**
    - **Analytics** → **Gateway** → **Network logs**
-   - Filter: Destination Port = 51820
+   - Filter: Destination Port = 443 (or your configured WG_PORT)
    - Look for "Block" actions and reason
 
 4. **Check WireGuard status:**
@@ -1237,7 +1250,7 @@ net start WarpSvc
 
 2. Check Gateway logs:
    - Go to **Analytics** → **Gateway** → **Network logs**
-   - Filter: Destination Port = 51820
+   - Filter: Destination Port = 443 (or your configured WG_PORT)
    - Look for block reason
 
 3. Verify Split Tunnel configuration:
@@ -1349,8 +1362,8 @@ docker exec wireguard wg show wg0 transfer
 # View VNC service logs
 journalctl -u vncserver-hossein@1.service -f
 
-# Network connections
-netstat -tuln | grep -E '(51820|1370|1377|1380)'
+# Network connections (adjust port if WG_PORT changed)
+netstat -tuln | grep -E '(443|1370|1377|1380)'
 
 # Disk usage
 df -h

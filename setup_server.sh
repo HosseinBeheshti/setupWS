@@ -201,8 +201,8 @@ print_message "✓ IP forwarding enabled"
 print_message "Configuring firewall..."
 ufw --force enable
 ufw allow 22/tcp comment 'SSH'
-ufw allow 51820/udp comment 'WireGuard'
-print_message "✓ Firewall configured"
+ufw allow ${WG_PORT:-443}/udp comment 'WireGuard'
+print_message "✓ Firewall configured (WireGuard on port ${WG_PORT:-443}/udp)"
 
 # Start Docker services
 print_message "Starting ZTNA Docker services..."
@@ -345,9 +345,10 @@ echo ""
 # Display ZTNA information
 echo -e "${YELLOW}ZTNA Services:${NC}"
 echo -e "-----------------------------------------------------"
-echo -e "  ${GREEN}WireGuard:${NC}         Port ${WG_PORT:-51820}/udp"
+echo -e "  ${GREEN}WireGuard:${NC}         Port ${WG_PORT:-443}/udp"
 echo -e "  ${GREEN}Cloudflare Tunnel:${NC} Dynamic port (access via CF Access)"
 echo -e "  ${GREEN}Database:${NC}          $DB_PATH"
+echo -e "  ${YELLOW}Note:${NC}              Port ${WG_PORT:-443}/UDP appears as HTTPS/QUIC traffic"
 echo ""
 
 # Display VNC user information

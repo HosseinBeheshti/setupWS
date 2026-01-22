@@ -20,17 +20,18 @@ DB_PATH="/var/lib/ztna/users.db"
 WG_CONFIG="/etc/wireguard/wg0.conf"
 CLIENT_DIR="/var/lib/ztna/clients"
 WG_SUBNET="10.13.13.0/24"
-WG_PORT="51820"
 
-# Source environment variables
+# Source environment variables (must be done BEFORE using WG_PORT)
 if [ -f "$(dirname "$0")/workstation.env" ]; then
     source "$(dirname "$0")/workstation.env"
     WG_SERVER_PUBLIC_IP="${WG_SERVER_PUBLIC_IP:-$(curl -s ifconfig.me)}"
     WG_DNS="${WG_DNS:-1.1.1.1,1.0.0.1}"
+    WG_PORT="${WG_PORT:-443}"  # Read from env or default to 443
 else
     echo -e "${YELLOW}Warning: workstation.env not found, using defaults${NC}"
     WG_SERVER_PUBLIC_IP=$(curl -s ifconfig.me)
     WG_DNS="1.1.1.1,1.0.0.1"
+    WG_PORT="443"  # Default to 443 for Iran obfuscation
 fi
 
 # Check if running as root
