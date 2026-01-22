@@ -231,26 +231,158 @@ Now that posture checks are enabled, you can use them in Access policies.
    **Require rules:**
    - Selector: **Login Methods** → Value: `One-time PIN`
    - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
+
+5. **Configure identity providers:**
+   - Select your identity provider (One-time PIN or enterprise IdP)
+   - Enable **Instant Auth** if using single IdP
+   - Click **Next**
+
+6. **Finalize settings:**
+   - Configure App Launcher visibility (optional)
+   - Set block page behavior
    - Click **Save**
 
-#### VNC Access Applications
+7. **Verify application:**
+   - Go to **Access controls** → **Applications**
+   - Your "Admin SSH Access" should now be listed
+   - You can click **Configure** to edit it later
 
-Repeat the above steps for each VNC service:
+#### VNC Access Application - Hossein
 
-**VNC - Hossein:**
-- Application name: `VNC - Hossein`
-- Domain: `vnc-hossein.yourdomain.com`
-- Same policy: Allow admins with OTP + WARP/Gateway
+1. **Create application:**
+   - Go to **Access controls** → **Applications**
+   - Select **Add an application**
+   - Choose **Self-hosted**
 
-**VNC - Asal:**
-- Application name: `VNC - Asal`
-- Domain: `vnc-asal.yourdomain.com`
-- Same policy: Allow admins with OTP + WARP/Gateway
+2. **Configure application:**
+   ```
+   Application name: VNC - Hossein
+   Session Duration: 8 hours
+   ```
 
-**VNC - Hassan:**
-- Application name: `VNC - Hassan`
-- Domain: `vnc-hassan.yourdomain.com`
-- Same policy: Allow admins with OTP + WARP/Gateway
+3. **Add public hostname:**
+   - Select **Add public hostname**
+   - Domain: `vnc-hossein.yourdomain.com`
+   - Click **Next**
+
+4. **Configure Access policy:**
+   ```
+   Policy name: VNC Hossein Policy
+   Action: Allow
+   ```
+   
+   **Include rule:**
+   - Selector: **Emails**
+   - Value: `hossein@yourdomain.com` (or add other admin emails)
+   
+   **Require rules:**
+   - Selector: **Login Methods** → Value: `One-time PIN`
+   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
+
+5. **Configure identity providers:**
+   - Select your identity provider (One-time PIN or enterprise IdP)
+   - Enable **Instant Auth** if using single IdP
+   - Click **Next**
+
+6. **Finalize settings:**
+   - Under **Experience settings**, select **Show application in App Launcher** (optional)
+   - Set block page behavior
+   - Click **Save**
+
+#### VNC Access Application - Asal
+
+1. **Create application:**
+   - Go to **Access controls** → **Applications**
+   - Select **Add an application**
+   - Choose **Self-hosted**
+
+2. **Configure application:**
+   ```
+   Application name: VNC - Asal
+   Session Duration: 8 hours
+   ```
+
+3. **Add public hostname:**
+   - Select **Add public hostname**
+   - Domain: `vnc-asal.yourdomain.com`
+   - Click **Next**
+
+4. **Configure Access policy:**
+   ```
+   Policy name: VNC Asal Policy
+   Action: Allow
+   ```
+   
+   **Include rule:**
+   - Selector: **Emails**
+   - Value: `asal@yourdomain.com, hossein@yourdomain.com` (add authorized users)
+   
+   **Require rules:**
+   - Selector: **Login Methods** → Value: `One-time PIN`
+   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
+
+5. **Configure identity providers:**
+   - Select your identity provider (One-time PIN or enterprise IdP)
+   - Enable **Instant Auth** if using single IdP
+   - Click **Next**
+
+6. **Finalize settings:**
+   - Under **Experience settings**, select **Show application in App Launcher** (optional)
+   - Set block page behavior
+   - Click **Save**
+
+#### VNC Access Application - Hassan
+
+1. **Create application:**
+   - Go to **Access controls** → **Applications**
+   - Select **Add an application**
+   - Choose **Self-hosted**
+
+2. **Configure application:**
+   ```
+   Application name: VNC - Hassan
+   Session Duration: 8 hours
+   ```
+
+3. **Add public hostname:**
+   - Select **Add public hostname**
+   - Domain: `vnc-hassan.yourdomain.com`
+   - Click **Next**
+
+4. **Configure Access policy:**
+   ```
+   Policy name: VNC Hassan Policy
+   Action: Allow
+   ```
+   
+   **Include rule:**
+   - Selector: **Emails**
+   - Value: `hassan@yourdomain.com, hossein@yourdomain.com` (add authorized users)
+   
+   **Require rules:**
+   - Selector: **Login Methods** → Value: `One-time PIN`
+   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
+
+5. **Configure identity providers:**
+   - Select your identity provider (One-time PIN or enterprise IdP)
+   - Enable **Instant Auth** if using single IdP
+   - Click **Next**
+
+6. **Finalize settings:**
+   - Under **Experience settings**, select **Show application in App Launcher** (optional)
+   - Set block page behavior
+   - Click **Save**
+
+#### Verify All Applications
+
+After creating all applications:
+- Go to **Access controls** → **Applications**
+- You should see 4 applications listed:
+  - Admin SSH Access
+  - VNC - Hossein
+  - VNC - Asal
+  - VNC - Hassan
+- Each should show status as **Active**
 
 ---
 
