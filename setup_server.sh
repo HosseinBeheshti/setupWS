@@ -236,7 +236,15 @@ if [[ -f "./docker-compose-ztna.yml" ]]; then
     fi
     
     if docker ps | grep -q cloudflared; then
-        print_message "✓ Cloudflare tunnel running"
+        print_message "✓ Cloudflare tunnel container running"
+        
+        # Verify tunnel is connected by checking logs
+        sleep 3
+        if docker logs cloudflared 2>&1 | grep -q "Registered tunnel connection"; then
+            print_message "✓ Cloudflare tunnel connected successfully"
+        else
+            print_warning "Cloudflare tunnel may not be connected. Check logs: docker logs cloudflared"
+        fi
     else
         print_warning "Cloudflare tunnel not running, check logs: docker logs cloudflared"
     fi
