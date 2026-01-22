@@ -89,157 +89,189 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 
 ## Part 1: Cloudflare Zero Trust Setup
 
-### Step 1.1: Create Zero Trust Team
+### Step 1.1: Create Zero Trust Organization
 
-1. **Navigate to Cloudflare Zero Trust:**
-   - Login to [Cloudflare Dashboard](https://dash.cloudflare.com)
-   - Click **Zero Trust** in the sidebar
-   - Click **Create a team**
-
+1. **Sign up for Zero Trust:**
+   - Navigate to [Cloudflare One Dashboard](https://one.dash.cloudflare.com/)
+   - On the onboarding screen, select **Zero Trust**
+   
 2. **Choose team name:**
    ```
    Team name: your-company-ztna
-   Team domain: https://your-company-ztna.cloudflareaccess.com
    ```
+   - This creates your team domain: `https://your-company-ztna.cloudflareaccess.com`
+   - Your team name is a unique identifier for your organization
+   - Users will enter this when enrolling devices
 
-3. **Select plan:**
+3. **Select subscription plan:**
    - Choose **Free** plan (up to 50 users)
-   - Click **Continue**
+   - Complete payment details (required but no charge for Free plan)
 
-### Step 1.2: Verify Domain
+### Step 1.2: Configure Identity Provider
 
-1. **Add your domain:**
-   - Go to **Settings** → **Custom Pages**
-   - Add your domain (e.g., `yourdomain.com`)
+1. **Add identity provider:**
+   - Go to **Integrations** → **Identity providers**
+   - Select **Add new identity provider**
 
-2. **Verify ownership:**
-   - Ensure your domain uses Cloudflare nameservers
-   - DNS should already be managed by Cloudflare
+2. **Choose authentication method:**
+   
+   **Option A: One-time PIN (OTP)** - Quick setup, good for testing:
+   - Select **One-time PIN**
+   - Enable **TOTP (Time-based OTP)**
+   - Users will receive email codes or scan QR codes
+   - Compatible with Google Authenticator, Authy, Microsoft Authenticator
+   
+   **Option B: Enterprise IdP** - For production environments:
+   - Select your IdP (Okta, Microsoft Entra ID, Google Workspace, etc.)
+   - Follow provider-specific setup instructions
+   - Supports SAML or OIDC protocols
 
 ### Step 1.3: Create Cloudflare Tunnel
 
 1. **Navigate to Tunnels:**
-   - Zero Trust dashboard → **Networks** → **Tunnels**
-   - Click **Create a tunnel**
+   - Go to **Networks** → **Connectors** → **Cloudflare Tunnels**
+   - Select **Create a tunnel**
 
-2. **Configure tunnel:**
+2. **Choose connector type:**
+   - Select **Cloudflared**
+   - Click **Next**
+
+3. **Name your tunnel:**
    ```
    Tunnel name: vps-ztna-tunnel
    ```
    - Click **Save tunnel**
 
-3. **Copy tunnel token:**
-   ```
-   You'll see a command like:
-   cloudflared tunnel run --token eyJhIjoiMTIzNC...
-   
-   Copy the entire token (starts with eyJh...)
-   Save it securely - you'll need it for VPS setup
-   ```
+4. **Install connector (save for VPS setup):**
+   - Copy the installation command shown
+   - Example: `cloudflared tunnel run --token eyJhIjoiMTIzNC...`
+   - **Save the token** (starts with `eyJh...`) - you'll need it in Step 2
 
-4. **Configure public hostnames:**
+5. **Configure public hostname routes:**
    
-   Click **Public Hostname** tab, then add these:
+   Go to **Published applications** tab and add:
 
    **SSH Access:**
    - Subdomain: `ssh`
-   - Domain: `yourdomain.com`
-   - Type: `SSH`
-   - URL: `ssh://localhost:22`
-   - Click **Save hostname**
+   - Domain: `yourdomain.com` (select from dropdown)
+   - Service Type: `SSH`
+   - URL: `localhost:22`
+   - Click **Save**
 
-   **VNC Hosts (repeat for each user):**
+   **VNC Applications (repeat for each user):**
    
    For hossein:
    - Subdomain: `vnc-hossein`
    - Domain: `yourdomain.com`
-   - Type: `HTTP`
-   - URL: `http://localhost:1370`
+   - Service Type: `HTTP`
+   - URL: `localhost:1370`
    - Save
 
    For asal:
    - Subdomain: `vnc-asal`
    - Domain: `yourdomain.com`
-   - Type: `HTTP`
-   - URL: `http://localhost:1377`
+   - Service Type: `HTTP`
+   - URL: `localhost:1377`
    - Save
 
    For hassan:
    - Subdomain: `vnc-hassan`
    - Domain: `yourdomain.com`
-   - Type: `HTTP`
-   - URL: `http://localhost:1380`
+   - Service Type: `HTTP`
+   - URL: `localhost:1380`
    - Save
 
-### Step 1.4: Configure Access Policies
+6. **Complete tunnel setup:**
+   - Select **Next**
+   - Your tunnel should show **Healthy** status once the connector runs on your VPS
 
-#### Enable 2FA/TOTP
+### Step 1.4: Create Access Applications & Policies
 
-1. **Go to Settings → Authentication:**
-   - Zero Trust dashboard → **Settings** → **Authentication**
-   - Click **Login methods** tab
-   - Click **Add new** → **One-time PIN**
-   - Enable **TOTP (Time-based OTP)**
-   - Save
+#### SSH Access Application
 
-2. **Configure authenticator apps:**
-   - Users will scan QR code during first login
-   - Compatible with Google Authenticator, Authy, Microsoft Authenticator
+1. **Create application:**
+   - Go to **Access controls** → **Applications**
+   - Select **Add an application**
+   - Choose **Self-hosted**
 
-#### Create Admin Access Policy
-
-1. **Navigate to Access → Applications:**
-   - Click **Add an application**
-   - Select **Self-hosted**
-
-2. **Configure application (SSH):**
+2. **Configure application:**
    ```
    Application name: Admin SSH Access
-   Session duration: 8 hours
-   Application domain: ssh.yourdomain.com
+   Session Duration: 8 hours
    ```
 
-3. **Add Access Policy:**
+3. **Add public hostname:**
+   - Select **Add public hostname**
+   - Domain: `ssh.yourdomain.com`
+   - Click **Next**
+
+4. **Configure Access policy:**
    ```
-   Policy name: Admins Only
+   Policy name: Admin SSH Policy
    Action: Allow
-   
-   Include rules:
-   - Emails: hossein@yourdomain.com, admin@yourdomain.com
-   
-   Require rules:
-   - Require One-time PIN
-   - Require WARP (device posture check)
    ```
-   - Click **Add policy**
-
-4. **Repeat for VNC applications:**
    
-   Create separate applications for:
-   - `vnc-hossein.yourdomain.com`
-   - `vnc-asal.yourdomain.com`
-   - `vnc-hassan.yourdomain.com`
+   **Include rule:**
+   - Selector: **Emails**
+   - Value: `hossein@yourdomain.com, admin@yourdomain.com`
    
-   Each with same policy (Admins Only + TOTP + WARP)
+   **Require rules:**
+   - **Login Methods**: One-time PIN
+   - **Device posture**: WARP (add after enabling posture checks)
 
-#### Enable Device Posture Checks
+5. **Configure identity providers:**
+   - Select your identity provider (One-time PIN or enterprise IdP)
+   - Enable **Instant Auth** if using single IdP
+   - Click **Next**
 
-1. **Navigate to Settings → WARP Client:**
-   - Zero Trust dashboard → **Settings** → **WARP Client**
-   - Enable **Device posture checks**
+6. **Finalize settings:**
+   - Configure App Launcher visibility (optional)
+   - Set block page behavior
+   - Click **Save**
 
-2. **Configure device requirements:**
-   ```
-   Posture checks:
-   ☑ Require WARP client
-   ☑ Check device serial number (optional)
-   ☑ Verify OS version (optional)
-   ```
+#### VNC Access Applications
 
-3. **Create device enrollment rules:**
-   - Go to **Settings** → **Devices** → **Device enrollment**
-   - Add rule: **Email domain** = `yourdomain.com`
-   - Or: **Specific emails** = list of admin emails
+Repeat the above steps for each VNC service:
+
+**VNC - Hossein:**
+- Application name: `VNC - Hossein`
+- Domain: `vnc-hossein.yourdomain.com`
+- Same policy: Allow admins with OTP + WARP
+
+**VNC - Asal:**
+- Application name: `VNC - Asal`
+- Domain: `vnc-asal.yourdomain.com`
+- Same policy: Allow admins with OTP + WARP
+
+**VNC - Hassan:**
+- Application name: `VNC - Hassan`
+- Domain: `vnc-hassan.yourdomain.com`
+- Same policy: Allow admins with OTP + WARP
+
+### Step 1.5: Enable Device Posture Checks
+
+1. **Enable WARP device posture:**
+   - Go to **Settings** → **WARP Client**
+   - Enable **Device posture** checks
+
+2. **Configure device enrollment:**
+   - Go to **Settings** → **Devices** → **Device enrollment permissions**
+   - Add enrollment rule:
+     - **Allow** users from **Emails ending in**: `@yourdomain.com`
+     - Or select **Specific emails** and list admin emails
+
+3. **Create posture checks (optional):**
+   - Go to **Settings** → **WARP Client** → **Device posture**
+   - Add checks for:
+     - Specific OS versions
+     - Firewall enabled
+     - Disk encryption
+     - Application presence
+
+4. **Update Access policies:**
+   - Return to each Access application
+   - Edit policies to include **Device posture** requirements
+   - Select the WARP posture check in Require rules
 
 ---
 
