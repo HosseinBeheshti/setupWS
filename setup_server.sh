@@ -56,8 +56,9 @@ print_header "Step 0/5: Setting up ZTNA Infrastructure"
 print_message "Installing required packages..."
 apt-get update
 apt-get install -y \
-    docker.io \
-    docker-compose \
+    ca-certificates \
+    gnupg \
+    lsb-release \
     qrencode \
     sqlite3 \
     uuid-runtime \
@@ -66,6 +67,56 @@ apt-get install -y \
     iptables \
     net-tools \
     wireguard-tools
+
+print_message "✓ System packages installed"
+
+# Install Docker using official method
+print_message "Installing Docker..."
+if ! command -v docker &> /dev/null; then
+    # Remove old Docker installations
+    apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+    
+    # Setup Docker repository
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Install Docker Engine
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # Start and enable Docker
+    systemctl start docker
+    systemctl enable docker
+    
+    print_message "✓ Docker installed and started"
+else
+    print_message "✓ Docker already installed"
+    # Ensure Docker is running
+    if ! systemctl is-active --quiet docker; then
+        systemctl start docker
+        print_message "✓ Docker service started"
+    fi
+fi
+
+# Verify Docker is working
+if docker ps &> /dev/null; then
+    print_message "✓ Docker is operational"
+else
+    print_error "Docker installation failed or service not running"
+    print_message "Attempting to fix Docker service..."
+    systemctl restart docker
+    sleep 5
+    if ! docker ps &> /dev/null; then
+        print_error "Docker still not working. Check logs: journalctl -xeu docker"
+        exit 1
+    fi
+fi
 
 print_message "✓ Packages installed"
 
@@ -158,10 +209,11 @@ if [[ -f "./docker-compose-ztna.yml" ]]; then
     if [[ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]]; then
         print_warning "CLOUDFLARE_TUNNEL_TOKEN not set in workstation.env"
         print_warning "Cloudflare tunnel will not start. Set token and run:"
-        print_warning "  docker-compose -f docker-compose-ztna.yml up -d cloudflared"
+        print_warning "  docker compose -f docker-compose-ztna.yml up -d cloudflared"
     fi
     
-    docker-compose -f docker-compose-ztna.yml up -d
+    # Use 'docker compose' (v2) instead of 'docker-compose' (v1)
+    docker compose -f docker-compose-ztna.yml up -d
     print_message "✓ Docker services started"
     
     # Wait for containers to be ready
