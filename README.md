@@ -25,9 +25,9 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         ADMIN ACCESS TIER                            │
 │                                                                       │
-│  Admin Device (with WARP Client + 2FA)                              │
+│  Admin Device (with Gateway via WARP + 2FA)                         │
 │         │                                                             │
-│         ├─► Cloudflare Access (TOTP + Device Posture Check)         │
+│         ├─► Cloudflare Access (TOTP + Gateway Posture Check)        │
 │         │                                                             │
 │         ├─► Cloudflare Tunnel ──► VPS Services:                     │
 │         │                           ├─ SSH (port 22)                 │
@@ -52,7 +52,7 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 
 - **Zero Trust Security:** All access requires authentication + device verification
 - **TOTP 2FA:** Time-based one-time passwords (Google Authenticator/Authy)
-- **Device Posture Checks:** Only registered devices with WARP client can access
+- **Gateway Posture Checks:** Only Zero Trust enrolled devices can access admin resources
 - **WireGuard VPN:** High-performance VPN for secure traffic routing
 - **Automated Management:** Scripts for user provisioning, monitoring, and backups
 - **SQLite Database:** Track users, devices, and connections
@@ -78,9 +78,9 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 ### Client Requirements
 
 **For Admins:**
-- **Cloudflare WARP client** installed
+- **Cloudflare WARP client** installed and enrolled with Zero Trust (Gateway)
 - **Authenticator app** (Google Authenticator, Authy, Microsoft Authenticator)
-- **VNC client** (TigerVNC, RealVNC, Remmina)
+- **VNC client** (TigerVNC, RealVNC, noVNC via browser)
 
 **For Users:**
 - **WireGuard client** (Windows, macOS, Linux, iOS, Android)
@@ -185,16 +185,17 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    - Select **Next**
    - Your tunnel should show **Healthy** status once the connector runs on your VPS
 
-### Step 1.4: Enable Device Posture Checks
+### Step 1.4: Enable Gateway Posture Check
 
 **Important:** Complete this step BEFORE creating Access applications so posture checks are available in policies.
 
-1. **Enable the WARP posture check:**
+1. **Enable the Gateway posture check:**
    - Go to **Reusable components** → **Posture checks**
    - In **WARP client checks** section, select **Add a check**
-   - Select **WARP** (to allow any WARP client including consumer version)
-   - OR select **Gateway** (to require Zero Trust enrolled devices only - recommended)
+   - Select **Gateway** (requires Zero Trust enrolled devices only)
    - Click **Save**
+   
+   This ensures only devices enrolled in your Zero Trust organization can access admin resources.
 
 ### Step 1.5: Create Access Applications & Policies
 
@@ -212,7 +213,7 @@ Now that posture checks are enabled, you can use them in Access policies.
    
    **Require rules:**
    - Selector: **Login Methods** → Value: `One-time PIN`
-   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
+   - Selector: **Gateway** (device posture check from Step 1.4)
 
 
 #### SSH Access Application
@@ -358,17 +359,21 @@ Registered tunnel connection
 
 ## Part 3: Admin Access Configuration
 
-### Step 3.1: Install WARP Client (Admin Device)
+### Step 3.1: Install and Enroll WARP Client (Admin Device)
+
+**Important:** You must enroll WARP with your Zero Trust organization (Gateway mode) to pass the posture check.
 
 **On Windows:**
 1. Download from: https://1.1.1.1/
 2. Install and run `Cloudflare WARP.exe`
 3. Click **Settings** → **Preferences** → **Gateway with WARP**
+4. Click **Login to Cloudflare Zero Trust**
 
 **On macOS:**
 1. Download from: https://1.1.1.1/
 2. Install `Cloudflare_WARP.pkg`
 3. Open WARP app → **Preferences** → **Account** → **Login to Cloudflare Zero Trust**
+4. Enter your Zero Trust organization name (from Step 1.1)
 
 **On Linux:**
 ```bash
@@ -377,17 +382,21 @@ curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmo
 echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
 sudo apt update && sudo apt install cloudflare-warp
 
-# Register and connect
+# Register with Zero Trust organization
 warp-cli register
-warp-cli set-mode warp
+warp-cli teams-enroll your-company-ztna  # Use your team name from Step 1.1
 warp-cli connect
+
+# Verify enrollment
+warp-cli account
 ```
 
 ### Step 3.2: Enroll Device with Zero Trust
 
 1. **Login to Zero Trust:**
    - Open browser and navigate to: `https://your-company-ztna.cloudflareaccess.com`
-   - Enter your admin email
+   - Replace `your-company-ztna` with your team name from Step 1.1
+   - Enter your admin email (must be in Admin Policy from Step 1.5)
    - Check email and click verification link
 
 2. **Setup TOTP 2FA:**
@@ -397,41 +406,133 @@ warp-cli connect
    - Enter 6-digit code to verify
    - **Save backup codes** securely
 
-3. **Register device:**
-   - WARP client will show "Connected to Zero Trust"
-   - Your device is now registered with serial number/identifier
-   - Device posture checks are active
+3. **Verify Gateway enrollment:**
+   - WARP client should show "Connected" with your organization name
+   - Status should indicate "Zero Trust" or "Teams"
+   - Your device is now enrolled and will pass Gateway posture checks
+   - Device is registered with unique identifier in Cloudflare dashboard
 
-### Step 3.3: Access VNC via Cloudflare
+### Step 3.3: Connect to VNC Servers
 
-**Option 1: Web Browser (noVNC)**
+You can access VNC servers in three different ways depending on your preference:
 
-1. Navigate to: `https://vnc-hossein.yourdomain.com`
-2. Enter TOTP code when prompted
-3. Browser-based VNC session starts
+#### Method 1: Browser-Based VNC (Easiest - Recommended)
 
-**Option 2: VNC Client (SSH Tunnel)**
+Access VNC directly through your web browser using noVNC:
 
-1. **Create SSH tunnel:**
-   ```bash
-   ssh -L 5901:localhost:1370 ssh.yourdomain.com
-   ```
-   - Enter TOTP code when prompted
+1. **Navigate to VNC URL:**
+   - For Hossein: `https://vnc-hossein.yourdomain.com`
+   - For Asal: `https://vnc-asal.yourdomain.com`
+   - For Hassan: `https://vnc-hassan.yourdomain.com`
+   
+2. **Authenticate:**
+   - Browser redirects to Cloudflare Access
+   - Enter your email address
+   - Enter TOTP code from authenticator app
+   - Click **Allow**
 
-2. **Connect VNC client:**
-   ```bash
-   vncviewer localhost:5901
-   ```
-   - Enter VNC password for user `hossein`
+3. **Connect to VNC:**
+   - After authentication, noVNC interface loads in browser
+   - Enter VNC password for the specific user
+   - Full desktop environment displays in browser
+   - **Note:** First connection may take 5-10 seconds to load
 
-**Option 3: Direct VNC over Cloudflare Tunnel**
+**Browser-based advantages:**
+- No client software needed
+- Works on any device with a browser
+- Clipboard sharing (copy/paste between local and remote)
+- File upload capability (if configured)
 
-Configure VNC client to use Cloudflare Access:
+#### Method 2: Native VNC Client via SSH Tunnel (Best Performance)
+
+Use a dedicated VNC client for better performance and features:
+
+**Step 1: Create SSH tunnel through Cloudflare**
+
 ```bash
-# Install cloudflared on client machine
-# Access VNC through tunnel
-cloudflared access ssh --hostname vnc-hossein.yourdomain.com --destination localhost:1370
+# Install cloudflared if not already installed
+# See installation instructions in Step 3.4
+
+# Create tunnel to VNC server (example for Hossein on port 1370)
+cloudflared access tcp --hostname ssh.yourdomain.com --url localhost:5901 localhost:1370
 ```
+
+This command:
+- Opens SSH connection through Cloudflare tunnel
+- Forwards local port 5901 to remote VNC port 1370
+- Keeps running in background (don't close terminal)
+
+**For other users, change port number:**
+- Asal: `localhost:1377` → `localhost:5902`
+- Hassan: `localhost:1380` → `localhost:5903`
+
+**Step 2: Connect VNC client**
+
+**TigerVNC (Recommended):**
+```bash
+# Linux
+sudo apt install tigervnc-viewer
+vncviewer localhost:5901
+
+# macOS
+brew install tigervnc-viewer
+vncviewer localhost:5901
+
+# Windows
+# Download TigerVNC from: https://tigervnc.org/
+# Run vncviewer.exe
+# Server: localhost:5901
+```
+
+**RealVNC:**
+```bash
+# Connect to: localhost:5901
+# Enter VNC password when prompted
+```
+
+**Remmina (Linux):**
+```bash
+sudo apt install remmina remmina-plugin-vnc
+# Add new connection:
+# Protocol: VNC
+# Server: localhost:5901
+# Username: (leave empty for VNC auth)
+# Password: Your VNC password
+```
+
+**Native VNC client advantages:**
+- Better performance (lower latency)
+- Full keyboard shortcuts support
+- Better color depth and quality
+- File transfer capabilities
+- Multiple monitor support
+
+#### Method 3: Direct TCP Tunnel (Advanced)
+
+Use cloudflared to create a direct TCP tunnel for VNC:
+
+```bash
+# Tunnel directly to VNC port
+cloudflared access tcp --hostname vnc-hossein.yourdomain.com --url localhost:5901
+
+# In another terminal, connect VNC client
+vncviewer localhost:5901
+```
+
+This bypasses SSH and connects directly to the VNC service through the tunnel.
+
+#### Comparison of VNC Connection Methods
+
+| Method | Ease of Use | Performance | Features | Requirement |
+|--------|-------------|-------------|----------|-------------|
+| Browser (noVNC) | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | Basic | Just browser |
+| SSH Tunnel + Client | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Advanced | cloudflared + VNC client |
+| Direct TCP Tunnel | ⭐⭐⭐ | ⭐⭐⭐⭐ | Advanced | cloudflared + VNC client |
+
+**Recommendation:**
+- **First time users:** Use browser-based method
+- **Regular users:** Use SSH tunnel with native VNC client for best experience
+- **Developers/Power users:** Configure SSH tunnel once, use frequently
 
 ### Step 3.4: Access SSH via Cloudflare
 
