@@ -64,7 +64,8 @@ apt-get install -y \
     curl \
     wget \
     iptables \
-    net-tools
+    net-tools \
+    wireguard-tools
 
 print_message "✓ Packages installed"
 
