@@ -309,61 +309,6 @@ Edit the `workstation.env` file:
 vim workstation.env
 ```
 
-**Update these critical variables:**
-
-```bash
-# Server Configuration
-SERVER_PUBLIC_IP="your.vps.public.ip"
-ROOT_PASSWORD="YourStrongRootPassword123!"
-
-# Cloudflare Zero Trust
-CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiMTIzNC..." # Token from Step 1.3
-CLOUDFLARE_DOMAIN="yourdomain.com"
-CLOUDFLARE_ZONE_ID="your-zone-id"
-
-# WireGuard Configuration
-WG_SERVER_PUBLIC_IP="your.vps.public.ip"
-WG_PORT="51820"
-WG_SUBNET="10.13.13.0/24"
-WG_DNS="1.1.1.1,1.0.0.1"
-
-# Database & Backup
-DB_PATH="/var/lib/ztna/users.db"
-BACKUP_DIR="/var/lib/ztna/backups"
-
-# VNC Users (from existing config)
-VNCUSER2_USERNAME="hossein"
-VNCUSER2_PASSWORD="YourVNCPassword1"
-VNCUSER2_DISPLAY="1"
-VNCUSER2_PORT="1370"
-VNCUSER2_RESOLUTION="1920x1080"
-
-VNCUSER3_USERNAME="asal"
-VNCUSER3_PASSWORD="YourVNCPassword2"
-VNCUSER3_DISPLAY="2"
-VNCUSER3_PORT="1377"
-VNCUSER3_RESOLUTION="1920x1080"
-
-VNCUSER4_USERNAME="hassan"
-VNCUSER4_PASSWORD="YourVNCPassword3"
-VNCUSER4_DISPLAY="3"
-VNCUSER4_PORT="1380"
-VNCUSER4_RESOLUTION="1920x1080"
-
-# L2TP VPN (optional, for admin use)
-L2TP_SERVER="86.111.162.146"
-L2TP_PSK="YourL2TP-PSK"
-L2TP_USERNAME="your-l2tp-user"
-L2TP_PASSWORD="YourL2TPPassword"
-L2TP_PPP_GATEWAY="192.168.150.1"
-
-# VPN Selection
-VPN_LIST="l2tp ovpn"  # Keep existing if needed
-VPN_APPS="xrdp remmina firefox"
-```
-
-Save and exit (`Ctrl+X`, `Y`, `Enter`).
-
 ### Step 2.3: Run Setup Script
 
 Execute the master setup script:
