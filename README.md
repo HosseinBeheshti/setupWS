@@ -153,7 +153,7 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 
    **SSH Access:**
    - Subdomain: `ssh`
-   - Domain: `autoazma.ir` (select from dropdown)
+   - Domain: `yourdomain.com` (select from dropdown)
    - Service Type: `SSH`
    - URL: `localhost:22`
    - Click **Save**
@@ -162,21 +162,21 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    
    For hossein:
    - Subdomain: `vnc-hossein`
-   - Domain: `autoazma.ir`
+   - Domain: `yourdomain.com`
    - Service Type: `HTTP`
    - URL: `localhost:1370`
    - Save
 
    For asal:
    - Subdomain: `vnc-asal`
-   - Domain: `autoazma.ir`
+   - Domain: `yourdomain.com`
    - Service Type: `HTTP`
    - URL: `localhost:1377`
    - Save
 
    For hassan:
    - Subdomain: `vnc-hassan`
-   - Domain: `autoazma.ir`
+   - Domain: `yourdomain.com`
    - Service Type: `HTTP`
    - URL: `localhost:1380`
    - Save
@@ -208,7 +208,7 @@ Now that posture checks are enabled, you can use them in Access policies.
    ```
    **Include rule:**
    - Selector: **Emails**
-   - Value: `h.beheshti92@gmail.com, admin@autoazma.ir`
+   - Value: `admin@yourdomain.com`
    
    **Require rules:**
    - Selector: **Login Methods** → Value: `One-time PIN`
@@ -225,12 +225,12 @@ Now that posture checks are enabled, you can use them in Access policies.
 2. **Configure application:**
    ```
    Application name: Admin SSH Access
-   Session Duration: 8 hours
+   Session Duration: 12 hours
    ```
 
 3. **Add public hostname:**
    - Select **Add public hostname**
-   - Domain: `ssh.autoazma.ir`
+   - Domain: `ssh.yourdomain.com`
    - Click **Next**
 
 4. **Apply the Admin Policy:**
@@ -253,68 +253,12 @@ Now that posture checks are enabled, you can use them in Access policies.
 2. **Configure application:**
    ```
    Application name: VNC - Hossein
-   Session Duration: 8 hours
+   Session Duration: 12 hours
    ```
 
 3. **Add public hostname:**
    - Select **Add public hostname**
-   - Domain: `vnc-hossein.autoazma.ir`
-   - Click **Next**
-
-4. **Apply the Admin Policy:**
-   - In the **Policies** tab, select **Add a policy**
-   - Select **Admin Policy** from the existing policies dropdown
-   - Click **Next**
-
-5. **Finalize settings:**
-   - Under **Experience settings**, select **Show application in App Launcher** (optional)
-   - Set block page behavior
-   - Click **Save**
-
-#### VNC Access Application - Asal
-
-1. **Create application:**
-   - Go to **Access controls** → **Applications**
-   - Select **Add an application**
-   - Choose **Self-hosted**
-
-2. **Configure application:**
-   ```
-   Application name: VNC - Asal
-   Session Duration: 8 hours
-   ```
-
-3. **Add public hostname:**
-   - Select **Add public hostname**
-   - Domain: `vnc-asal.autoazma.ir`
-   - Click **Next**
-
-4. **Apply the Admin Policy:**
-   - In the **Policies** tab, select **Add a policy**
-   - Select **Admin Policy** from the existing policies dropdown
-   - Click **Next**
-
-5. **Finalize settings:**
-   - Under **Experience settings**, select **Show application in App Launcher** (optional)
-   - Set block page behavior
-   - Click **Save**
-
-#### VNC Access Application - Hassan
-
-1. **Create application:**
-   - Go to **Access controls** → **Applications**
-   - Select **Add an application**
-   - Choose **Self-hosted**
-
-2. **Configure application:**
-   ```
-   Application name: VNC - Hassan
-   Session Duration: 8 hours
-   ```
-
-3. **Add public hostname:**
-   - Select **Add public hostname**
-   - Domain: `vnc-hassan.autoazma.ir`
+   - Domain: `vnc-hossein.yourdomain.com`
    - Click **Next**
 
 4. **Apply the Admin Policy:**
@@ -374,7 +318,7 @@ ROOT_PASSWORD="YourStrongRootPassword123!"
 
 # Cloudflare Zero Trust
 CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiMTIzNC..." # Token from Step 1.3
-CLOUDFLARE_DOMAIN="autoazma.ir"
+CLOUDFLARE_DOMAIN="yourdomain.com"
 CLOUDFLARE_ZONE_ID="your-zone-id"
 
 # WireGuard Configuration
@@ -517,7 +461,7 @@ warp-cli connect
 
 **Option 1: Web Browser (noVNC)**
 
-1. Navigate to: `https://vnc-hossein.autoazma.ir`
+1. Navigate to: `https://vnc-hossein.yourdomain.com`
 2. Enter TOTP code when prompted
 3. Browser-based VNC session starts
 
@@ -525,7 +469,7 @@ warp-cli connect
 
 1. **Create SSH tunnel:**
    ```bash
-   ssh -L 5901:localhost:1370 ssh.autoazma.ir
+   ssh -L 5901:localhost:1370 ssh.yourdomain.com
    ```
    - Enter TOTP code when prompted
 
@@ -541,7 +485,7 @@ Configure VNC client to use Cloudflare Access:
 ```bash
 # Install cloudflared on client machine
 # Access VNC through tunnel
-cloudflared access ssh --hostname vnc-hossein.autoazma.ir --destination localhost:1370
+cloudflared access ssh --hostname vnc-hossein.yourdomain.com --destination localhost:1370
 ```
 
 ### Step 3.4: Access SSH via Cloudflare
@@ -558,7 +502,7 @@ cloudflared access ssh --hostname vnc-hossein.autoazma.ir --destination localhos
 
 2. **SSH through tunnel:**
    ```bash
-   cloudflared access ssh --hostname ssh.autoazma.ir
+   cloudflared access ssh --hostname ssh.yourdomain.com
    ```
    - Browser opens for authentication
    - Enter TOTP code
@@ -569,7 +513,7 @@ cloudflared access ssh --hostname vnc-hossein.autoazma.ir --destination localhos
    Add to `~/.ssh/config`:
    ```
    Host vps-ztna
-       HostName ssh.autoazma.ir
+       HostName ssh.yourdomain.com
        ProxyCommand cloudflared access ssh --hostname %h
        User root
    ```
@@ -966,7 +910,7 @@ sudo ufw status
 #### Issue 1: Cloudflare Tunnel Not Connecting
 
 **Symptoms:**
-- Cannot access `ssh.autoazma.ir` or VNC URLs
+- Cannot access `ssh.yourdomain.com` or VNC URLs
 - Browser shows "502 Bad Gateway"
 
 **Diagnosis:**
@@ -994,13 +938,13 @@ docker logs cloudflared
    curl https://www.cloudflare.com
    
    # Check DNS
-   nslookup autoazma.ir
+   nslookup yourdomain.com
    ```
 
 3. **DNS not propagated:**
    - Wait 5-10 minutes for DNS propagation
    - Verify DNS records in Cloudflare dashboard
-   - Use `dig` to check: `dig ssh.autoazma.ir`
+   - Use `dig` to check: `dig ssh.yourdomain.com`
 
 #### Issue 2: WireGuard Peer Can't Connect
 
