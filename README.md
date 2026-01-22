@@ -167,20 +167,6 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    - URL: `localhost:1370`
    - Save
 
-   For asal:
-   - Subdomain: `vnc-asal`
-   - Domain: `yourdomain.com`
-   - Service Type: `HTTP`
-   - URL: `localhost:1377`
-   - Save
-
-   For hassan:
-   - Subdomain: `vnc-hassan`
-   - Domain: `yourdomain.com`
-   - Service Type: `HTTP`
-   - URL: `localhost:1380`
-   - Save
-
 6. **Complete tunnel setup:**
    - Select **Next**
    - Your tunnel should show **Healthy** status once the connector runs on your VPS
@@ -276,11 +262,9 @@ Now that posture checks are enabled, you can use them in Access policies.
 
 After creating all applications:
 - Go to **Access controls** → **Applications**
-- You should see 4 applications listed:
+- You should see 2 applications listed:
   - Admin SSH Access
   - VNC - Hossein
-  - VNC - Asal
-  - VNC - Hassan
 - Each should show status as **Active**
 - All should be using the same **Admin Policy**
 
@@ -422,8 +406,6 @@ Access VNC directly through your web browser using noVNC:
 
 1. **Navigate to VNC URL:**
    - For Hossein: `https://vnc-hossein.yourdomain.com`
-   - For Asal: `https://vnc-asal.yourdomain.com`
-   - For Hassan: `https://vnc-hassan.yourdomain.com`
    
 2. **Authenticate:**
    - Browser redirects to Cloudflare Access
@@ -461,10 +443,6 @@ This command:
 - Opens SSH connection through Cloudflare tunnel
 - Forwards local port 5901 to remote VNC port 1370
 - Keeps running in background (don't close terminal)
-
-**For other users, change port number:**
-- Asal: `localhost:1377` → `localhost:5902`
-- Hassan: `localhost:1380` → `localhost:5903`
 
 **Step 2: Connect VNC client**
 
