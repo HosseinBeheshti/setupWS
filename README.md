@@ -153,7 +153,7 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 
    **SSH Access:**
    - Subdomain: `ssh`
-   - Domain: `yourdomain.com` (select from dropdown)
+   - Domain: `autoazma.ir` (select from dropdown)
    - Service Type: `SSH`
    - URL: `localhost:22`
    - Click **Save**
@@ -162,21 +162,21 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    
    For hossein:
    - Subdomain: `vnc-hossein`
-   - Domain: `yourdomain.com`
+   - Domain: `autoazma.ir`
    - Service Type: `HTTP`
    - URL: `localhost:1370`
    - Save
 
    For asal:
    - Subdomain: `vnc-asal`
-   - Domain: `yourdomain.com`
+   - Domain: `autoazma.ir`
    - Service Type: `HTTP`
    - URL: `localhost:1377`
    - Save
 
    For hassan:
    - Subdomain: `vnc-hassan`
-   - Domain: `yourdomain.com`
+   - Domain: `autoazma.ir`
    - Service Type: `HTTP`
    - URL: `localhost:1380`
    - Save
@@ -200,6 +200,21 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
 
 Now that posture checks are enabled, you can use them in Access policies.
 
+#### Access Policies 
+1. **Admin Access policy:**
+   ```
+   Policy name: Admin Policy
+   Action: Allow
+   ```
+   **Include rule:**
+   - Selector: **Emails**
+   - Value: `h.beheshti92@gmail.com, admin@autoazma.ir`
+   
+   **Require rules:**
+   - Selector: **Login Methods** → Value: `One-time PIN`
+   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
+
+
 #### SSH Access Application
 
 1. **Create application:**
@@ -215,31 +230,9 @@ Now that posture checks are enabled, you can use them in Access policies.
 
 3. **Add public hostname:**
    - Select **Add public hostname**
-   - Domain: `ssh.yourdomain.com`
+   - Domain: `ssh.autoazma.ir`
    - Click **Next**
 
-4. **Configure Access policy:**
-   ```
-   Policy name: Admin SSH Policy
-   Action: Allow
-   ```
-   
-   **Include rule:**
-   - Selector: **Emails**
-   - Value: `hossein@yourdomain.com, admin@yourdomain.com`
-   
-   **Require rules:**
-   - Selector: **Login Methods** → Value: `One-time PIN`
-   - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
-
-5. **Configure identity providers:**
-   - Select your identity provider (One-time PIN or enterprise IdP)
-   - Enable **Instant Auth** if using single IdP
-   - Click **Next**
-
-6. **Finalize settings:**
-   - Configure App Launcher visibility (optional)
-   - Set block page behavior
    - Click **Save**
 
 7. **Verify application:**
@@ -262,7 +255,7 @@ Now that posture checks are enabled, you can use them in Access policies.
 
 3. **Add public hostname:**
    - Select **Add public hostname**
-   - Domain: `vnc-hossein.yourdomain.com`
+   - Domain: `vnc-hossein.autoazma.ir`
    - Click **Next**
 
 4. **Configure Access policy:**
@@ -273,7 +266,7 @@ Now that posture checks are enabled, you can use them in Access policies.
    
    **Include rule:**
    - Selector: **Emails**
-   - Value: `hossein@yourdomain.com` (or add other admin emails)
+   - Value: `h.beheshti92@gmail.com` (or add other admin emails)
    
    **Require rules:**
    - Selector: **Login Methods** → Value: `One-time PIN`
@@ -304,7 +297,7 @@ Now that posture checks are enabled, you can use them in Access policies.
 
 3. **Add public hostname:**
    - Select **Add public hostname**
-   - Domain: `vnc-asal.yourdomain.com`
+   - Domain: `vnc-asal.autoazma.ir`
    - Click **Next**
 
 4. **Configure Access policy:**
@@ -315,7 +308,7 @@ Now that posture checks are enabled, you can use them in Access policies.
    
    **Include rule:**
    - Selector: **Emails**
-   - Value: `asal@yourdomain.com, hossein@yourdomain.com` (add authorized users)
+   - Value: `asal@autoazma.ir, h.beheshti92@gmail.com` (add authorized users)
    
    **Require rules:**
    - Selector: **Login Methods** → Value: `One-time PIN`
@@ -346,7 +339,7 @@ Now that posture checks are enabled, you can use them in Access policies.
 
 3. **Add public hostname:**
    - Select **Add public hostname**
-   - Domain: `vnc-hassan.yourdomain.com`
+   - Domain: `vnc-hassan.autoazma.ir`
    - Click **Next**
 
 4. **Configure Access policy:**
@@ -357,7 +350,7 @@ Now that posture checks are enabled, you can use them in Access policies.
    
    **Include rule:**
    - Selector: **Emails**
-   - Value: `hassan@yourdomain.com, hossein@yourdomain.com` (add authorized users)
+   - Value: `hassan@autoazma.ir, h.beheshti92@gmail.com` (add authorized users)
    
    **Require rules:**
    - Selector: **Login Methods** → Value: `One-time PIN`
@@ -419,7 +412,7 @@ ROOT_PASSWORD="YourStrongRootPassword123!"
 
 # Cloudflare Zero Trust
 CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiMTIzNC..." # Token from Step 1.3
-CLOUDFLARE_DOMAIN="yourdomain.com"
+CLOUDFLARE_DOMAIN="autoazma.ir"
 CLOUDFLARE_ZONE_ID="your-zone-id"
 
 # WireGuard Configuration
@@ -562,7 +555,7 @@ warp-cli connect
 
 **Option 1: Web Browser (noVNC)**
 
-1. Navigate to: `https://vnc-hossein.yourdomain.com`
+1. Navigate to: `https://vnc-hossein.autoazma.ir`
 2. Enter TOTP code when prompted
 3. Browser-based VNC session starts
 
@@ -570,7 +563,7 @@ warp-cli connect
 
 1. **Create SSH tunnel:**
    ```bash
-   ssh -L 5901:localhost:1370 ssh.yourdomain.com
+   ssh -L 5901:localhost:1370 ssh.autoazma.ir
    ```
    - Enter TOTP code when prompted
 
@@ -586,7 +579,7 @@ Configure VNC client to use Cloudflare Access:
 ```bash
 # Install cloudflared on client machine
 # Access VNC through tunnel
-cloudflared access ssh --hostname vnc-hossein.yourdomain.com --destination localhost:1370
+cloudflared access ssh --hostname vnc-hossein.autoazma.ir --destination localhost:1370
 ```
 
 ### Step 3.4: Access SSH via Cloudflare
@@ -603,7 +596,7 @@ cloudflared access ssh --hostname vnc-hossein.yourdomain.com --destination local
 
 2. **SSH through tunnel:**
    ```bash
-   cloudflared access ssh --hostname ssh.yourdomain.com
+   cloudflared access ssh --hostname ssh.autoazma.ir
    ```
    - Browser opens for authentication
    - Enter TOTP code
@@ -614,7 +607,7 @@ cloudflared access ssh --hostname vnc-hossein.yourdomain.com --destination local
    Add to `~/.ssh/config`:
    ```
    Host vps-ztna
-       HostName ssh.yourdomain.com
+       HostName ssh.autoazma.ir
        ProxyCommand cloudflared access ssh --hostname %h
        User root
    ```
@@ -1011,7 +1004,7 @@ sudo ufw status
 #### Issue 1: Cloudflare Tunnel Not Connecting
 
 **Symptoms:**
-- Cannot access `ssh.yourdomain.com` or VNC URLs
+- Cannot access `ssh.autoazma.ir` or VNC URLs
 - Browser shows "502 Bad Gateway"
 
 **Diagnosis:**
@@ -1039,13 +1032,13 @@ docker logs cloudflared
    curl https://www.cloudflare.com
    
    # Check DNS
-   nslookup yourdomain.com
+   nslookup autoazma.ir
    ```
 
 3. **DNS not propagated:**
    - Wait 5-10 minutes for DNS propagation
    - Verify DNS records in Cloudflare dashboard
-   - Use `dig` to check: `dig ssh.yourdomain.com`
+   - Use `dig` to check: `dig ssh.autoazma.ir`
 
 #### Issue 2: WireGuard Peer Can't Connect
 
