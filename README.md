@@ -196,9 +196,13 @@ This guide provides complete step-by-step instructions for deploying **Cloudflar
    - OR select **Gateway** (to require Zero Trust enrolled devices only - recommended)
    - Click **Save**
 
-2. **Configure device enrollment permissions:**
+2. **(Optional) Configure device enrollment permissions:**
+   
+   **Note:** This step is only needed if you want to control which users can enroll their devices into your Zero Trust organization. If you're fine with any user enrolling, you can skip this.
+   
+   To restrict device enrollment:
    - Go to **Team & Resources** → **Devices** → **Device profiles** → **Management**
-   - In **Device enrollment**, select **Manage**
+   - In **Device enrollment**, look for **Device enrollment permissions** and select **Manage**
    - In the **Policies** tab, configure an Access policy:
      - Action: **Allow**
      - Include rule: **Emails ending in** → `@yourdomain.com`
