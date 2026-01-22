@@ -231,15 +231,6 @@ Now that posture checks are enabled, you can use them in Access policies.
    **Require rules:**
    - Selector: **Login Methods** → Value: `One-time PIN`
    - Selector: **WARP** or **Gateway** (whichever you enabled in Step 1.4)
-
-5. **Configure identity providers:**
-   - Select your identity provider (One-time PIN or enterprise IdP)
-   - Enable **Instant Auth** if using single IdP
-   - Click **Next**
-
-6. **Finalize settings:**
-   - Configure App Launcher visibility (optional)
-   - Set block page behavior
    - Click **Save**
 
 #### VNC Access Applications
