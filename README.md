@@ -341,6 +341,41 @@ Users will need your **team name** to enroll devices:
 3. Entering their email (any email including Gmail)
 4. Receiving and entering the one-time PIN code
 
+#### Step 5: Verify Enrolled Devices and User Emails (Admin)
+
+As an admin, you can verify which email addresses (including Gmail) have enrolled devices:
+
+1. In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** → **Devices**
+
+2. You'll see a list of all enrolled devices with the following information:
+   - **Device name** (computer hostname)
+   - **Email** - The Gmail or email address used during enrollment
+   - **User** - The user identity
+   - **Status** - Active/Revoked
+   - **Last seen** - When device last connected
+
+3. To view detailed information about a specific enrollment:
+   - Click on the device name
+   - Select **View details**
+   - You'll see:
+     - **Users** tab: Shows which email enrolled this device
+     - **Posture checks** tab: Device security status
+     - **Device info** tab: OS, WARP version, IP address
+
+4. To search for a specific Gmail address:
+   - Use the search box at the top
+   - Enter the Gmail address (e.g., `user@gmail.com`)
+   - See all devices enrolled with that email
+
+**Admin Actions:**
+- ✅ View all enrolled devices and their Gmail addresses
+- ✅ Revoke access for specific email/device combinations
+- ✅ Delete device registrations
+- ✅ Check device posture status
+- ✅ See last connection time and IP address
+
+**Note:** With One-time PIN authentication, users can enroll with any email address. The email is visible to admins in the device list for verification and management.
+
 ---
 
 ### 1.3 Create Device Posture Checks
