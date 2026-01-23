@@ -287,37 +287,60 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 **Navigation:** Cloudflare One Dashboard → **Team & Resources** → **Devices** → **Device profiles** → **Management**
 
+#### Step 1: Configure Device Enrollment Permissions
+
 1. Under **Device enrollment** → **Device enrollment permissions**, click **Manage**
 
-2. In the **Policies** tab, configure who can enroll devices:
-   
-   **Policy Configuration for One-Time PIN (Gmail users):**
-   
-   | Action | Rule Type | Selector | Value |
-   |--------|-----------|----------|-------|
-   | Allow | Include | Login Methods | One-time PIN |
-   
-   This allows anyone with a Gmail account to enroll by receiving a PIN code to their email.
-   
-   **⚠️ Important:** Device posture checks are NOT supported in device enrollment policies. Device posture can only be enforced AFTER enrollment (see Section 1.4 Gateway Network Policies).
+2. In the **Policies** tab:
+   - Click **Add a policy** button
+   - **Policy name**: Enter a name (e.g., "Allow Gmail Users with OTP")
+   - **Action**: Select **Allow** from dropdown
+   - **Session duration**: Leave default (24 hours)
 
-3. In the **Login methods** tab:
-   - Enable **One-time PIN** (this sends a PIN code to user's email)
-   - Optionally enable **Google** if you want to allow Google OAuth login
-   - Click **Save**
+3. **Configure Include Rule** (who can enroll):
+   - Under "Configure a rule", you'll see rule configuration
+   - **Rule type**: Select **Include**
+   - **Selector**: Select **Login Methods** from dropdown
+   - **Value**: Select **One-time PIN** from dropdown
+   - Click **Add** or the rule will be added automatically
+   
+   This allows anyone with an email address to enroll by receiving a PIN code.
 
-4. **Users can now enroll** by entering their Gmail address and receiving a one-time PIN
+4. Click **Save policy**
 
-**Your Team Name for Enrollment:**
-- Users will need your **team name** to enroll devices
+**⚠️ Important:** Device posture checks are NOT supported in device enrollment policies. Device posture can only be enforced AFTER enrollment (see Section 1.4 Gateway Network Policies).
+
+#### Step 2: Configure Login Methods
+
+1. In the **Login methods** tab:
+   - Find **One-time PIN** in the list
+   - Click the toggle or checkbox to **Enable** it
+   - This allows users to receive a PIN code to their email (including Gmail)
+   - (Optional) Also enable **Google** if you want to allow Google OAuth login
+   
+2. Click **Save** at the bottom of the page
+
+#### Step 3: Note Your Team Name
+
+Users will need your **team name** to enroll devices:
 - Your team name is visible in the Cloudflare One dashboard URL
 - Format: `https://<your-team-name>.cloudflareaccess.com`
 - Example: If your URL is `mycompany-ztna.cloudflareaccess.com`, your team name is `mycompany-ztna`
-- Share this team name with users for manual enrollment
+- Share this team name with users for enrollment
 
-**To prevent users from leaving your organization after enrollment:**
-- Go to **Devices** → **Device profiles** → **Default** → **Settings**
-- Disable **Allow device to leave organization**
+#### Step 4: (Optional) Prevent Users from Leaving Organization
+
+1. Go to **Team & Resources** → **Devices** → **Device profiles** → **Default**
+2. Click **Settings** tab
+3. Find **Allow device to leave organization**
+4. Toggle it to **Disabled**
+5. Click **Save**
+
+**✅ Device enrollment is now enabled!** Users can enroll by:
+1. Opening Cloudflare One Agent
+2. Entering team name
+3. Entering their email (any email including Gmail)
+4. Receiving and entering the one-time PIN code
 
 ---
 
@@ -421,63 +444,116 @@ Click **Save settings**
 
 #### Step C: Create Gateway Network Policies
 
-**Navigation:** Cloudflare One Dashboard → **Traffic policies** → **Network** → **Add a policy**
+**Navigation:** Cloudflare One Dashboard → **Traffic policies** → **Network**
 
-**Policy 1: Allow Authenticated Users to WireGuard**
+##### Policy 1: Allow Authenticated Users to WireGuard
 
-| Configuration | Value |
-|---------------|-------|
-| **Policy name** | Allow Authenticated Users to WireGuard |
-| **Action** | Allow |
-| **Precedence** | 1 (highest priority) |
+**Step-by-step creation:**
 
-**Traffic Conditions:**
-| Selector | Operator | Value |
-|----------|----------|-------|
-| Destination IP | in | `<YOUR-VPS-IP>` (e.g., 65.109.210.232) |
-| **AND** Destination Port | is | **443** (or your configured WG_PORT) |
-| **AND** Protocol | is | UDP |
+1. Click **Add a policy** button at the top
 
-**Identity Conditions (One-time PIN users):**
-| Selector | Operator | Value |
-|----------|----------|-------|
-| **AND** Login Methods | is | One-time PIN |
+2. **Configure Basic Settings:**
+   - **Policy name**: Enter "Allow Authenticated Users to WireGuard"
+   - **Action**: Select **Allow** from dropdown
+   - Leave **Precedence** as default (it will be 1 for first policy)
 
-**Device Posture Conditions (Whitelist):**
-| Selector | Operator | Value |
-|----------|----------|-------|
-| **AND** Passed Device Posture Checks | in | [Select all posture checks created in 1.3] |
+3. **Configure Traffic Conditions** (what traffic this applies to):
+   
+   Click **Add condition** under Traffic section:
+   
+   - **First condition:**
+     - Selector: Select **Destination IP**
+     - Operator: Select **in**
+     - Value: Enter your VPS IP (e.g., `65.109.210.232`)
+     - Click **And** to add next condition
+   
+   - **Second condition:**
+     - Selector: Select **Destination Port**
+     - Operator: Select **is**
+     - Value: Enter **443** (or your configured WG_PORT from workstation.env)
+     - Click **And** to add next condition
+   
+   - **Third condition:**
+     - Selector: Select **Protocol**
+     - Operator: Select **is**
+     - Value: Select **UDP**
 
-This enforces:
-- ✅ User must have authenticated via One-time PIN (Gmail)
-- ✅ Device must pass ALL posture checks (OS version, firewall, etc.)
+4. **Configure Identity Conditions** (who can access):
+   
+   Click **Add condition** under Identity section:
+   
+   - Selector: Select **Login Methods**
+   - Operator: Select **is**
+   - Value: Select **One-time PIN**
+   - Click **And** to add device posture check
+
+5. **Configure Device Posture Conditions** (device whitelist):
+   
+   - Selector: Select **Passed Device Posture Checks**
+   - Operator: Select **in**
+   - Value: Check ALL the posture checks you created in Section 1.3:
+     - ✅ WARP Connected
+     - ✅ Windows 10 Minimum (or your OS checks)
+     - ✅ Disk Encryption
+     - ✅ Firewall Enabled
+     - ✅ Domain Joined (if applicable)
+
+6. Click **Create policy**
+
+**This policy enforces:**
+- ✅ User must have authenticated via One-time PIN (any email including Gmail)
+- ✅ Device must pass ALL posture checks (OS version, firewall, disk encryption, etc.)
 - ✅ Device must be connected to Cloudflare One Agent
+- ✅ Only allows access to WireGuard port 443/UDP on your VPS IP
 
-Click **Create policy**
+##### Policy 2: Block All Other Traffic to WireGuard (Deny by Default)
 
-**Policy 2: Block All Other Traffic to WireGuard**
+**Step-by-step creation:**
 
-| Configuration | Value |
-|---------------|-------|
-| **Policy name** | Block Non-WARP WireGuard Access |
-| **Action** | Block |
-| **Precedence** | 2 (after allow policy) |
-| **Display block notification** | ✅ Enabled |
-| **Custom notification** | "Access denied. Connect via WARP with valid credentials." |
+1. Click **Add a policy** button again
 
-**Traffic Conditions:**
-| Selector | Operator | Value |
-|----------|----------|-------|
-| Destination IP | in | `<YOUR-VPS-IP>` |
-| **AND** Destination Port | is | **443** (or your configured WG_PORT) |
-| **AND** Protocol | is | UDP |
+2. **Configure Basic Settings:**
+   - **Policy name**: Enter "Block Non-WARP WireGuard Access"
+   - **Action**: Select **Block** from dropdown
+   - **Precedence**: Will be automatically set to 2 (after first policy)
 
-Click **Create policy**
+3. **Enable Block Notification:**
+   - Scroll down to find **Display block notification**
+   - Toggle it to **Enabled**
+   - In **Custom notification** field, enter: `Access denied. Connect via Cloudflare One Agent with valid credentials.`
+
+4. **Configure Traffic Conditions** (what traffic to block):
+   
+   Click **Add condition** under Traffic section:
+   
+   - **First condition:**
+     - Selector: Select **Destination IP**
+     - Operator: Select **in**
+     - Value: Enter your VPS IP (e.g., `65.109.210.232`)
+     - Click **And**
+   
+   - **Second condition:**
+     - Selector: Select **Destination Port**
+     - Operator: Select **is**
+     - Value: Enter **443** (must match Policy 1)
+     - Click **And**
+   
+   - **Third condition:**
+     - Selector: Select **Protocol**
+     - Operator: Select **is**
+     - Value: Select **UDP**
+
+5. **Do NOT add Identity or Device Posture conditions** (we want to block everyone who doesn't match Policy 1)
+
+6. Click **Create policy**
 
 **⚠️ Critical: Policy Order**
-- Cloudflare evaluates policies from top to bottom (precedence 1, 2, 3...)
-- Ensure **Allow policy is ABOVE Block policy**
-- You can drag policies to reorder them
+- Cloudflare evaluates policies from **top to bottom** (precedence 1, 2, 3...)
+- Your **Allow policy (1)** MUST be **ABOVE** the **Block policy (2)**
+- If needed, drag and drop policies to reorder them in the UI
+- Users matching Policy 1 get access, everyone else gets blocked by Policy 2
+
+**✅ Gateway Network Policies are now configured!**
 
 ---
 
