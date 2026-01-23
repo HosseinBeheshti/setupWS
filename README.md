@@ -287,28 +287,38 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 **Navigation:** Cloudflare One Dashboard → **Team & Resources** → **Devices** → **Device profiles** → **Management**
 
-1. Under **Device enrollment permissions**, click **Manage**
+1. Under **Device enrollment** → **Device enrollment permissions**, click **Manage**
 
-2. In the **Policies** tab, create enrollment policy:
+2. In the **Policies** tab, configure [Access policies](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/) to define who can enroll devices:
    - Click **Add a rule**
    - **Rule name**: "Allow Company Devices"
-   - **Selector**: Emails ending in
-   - **Value**: `@yourcompany.com` (or use **Everyone** for testing)
+   - **Example policy for email domain:**
+     | Selector | Operator | Value |
+     |----------|----------|-------|
+     | Include | Emails ending in | `@yourcompany.com` |
+   - Or use **Include** → **Everyone** for testing
    - Click **Save**
+   
+   **Note:** Device posture checks are NOT supported in device enrollment policies. WARP can only perform posture checks after the device is enrolled.
 
 3. In the **Login methods** tab:
-   - Select your configured Identity Provider(s)
-   - Enable **Instant Auth** (optional, for single-click login)
+   - Select your configured [Identity Provider(s)](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/)
+   - If no IdP integrated, you can use [one-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)
+   - (Optional) Enable **Instant Auth** if using single IdP - users skip Cloudflare Access login page and go directly to SSO
    - Click **Save**
 
-4. **Get Enrollment Link:**
-   - Your team enrollment URL is: `https://<your-team-name>.cloudflareaccess.com/warp`
-   - Example: `https://mycompany-ztna.cloudflareaccess.com/warp`
-   - **Save this link** - users need it to enroll their devices
+4. **Users can now enroll** by logging in to your identity provider
 
-5. **Generate QR Code (for mobile):**
-   - Create QR code for: `cf1app://oneapp.cloudflare.com/team?name=<your-team-name>`
-   - Use any QR generator (qr-code-generator.com, etc.)
+**Your Team Name for Enrollment:**
+- Users will need your **team name** to enroll devices
+- Your team name is visible in the Cloudflare One dashboard URL
+- Format: `https://<your-team-name>.cloudflareaccess.com`
+- Example: If your URL is `mycompany-ztna.cloudflareaccess.com`, your team name is `mycompany-ztna`
+- Share this team name with users for manual enrollment
+
+**To prevent users from leaving your organization after enrollment:**
+- Go to **Devices** → **Device profiles** → **Default** → **Settings**
+- Disable **Allow device to leave organization**
 
 ---
 
