@@ -297,12 +297,11 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
    - **Action**: Select **Allow** from dropdown
    - **Session duration**: Leave default (24 hours)
 
-3. **Configure Include Rule** (who can enroll):
-   - Under "Configure a rule", you'll see rule configuration
-   - **Rule type**: Select **Include**
+3. **Add Include selector** (who can enroll):
+   - You'll see selector configuration section
+   - Click **Include** (this is the logic type, like OR operator)
    - **Selector**: Select **Login Methods** from dropdown
    - **Value**: Select **One-time PIN** from dropdown
-   - Click **Add** or the rule will be added automatically
    
    This allows anyone with an email address to enroll by receiving a PIN code.
 
