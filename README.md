@@ -293,7 +293,7 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 2. In the **Policies** tab:
    - Click **Add a policy** button
-   - **Policy name**: Enter a name (e.g., "Allow Gmail Users with OTP")
+   - **Policy name**: Enter a name (e.g., "User Policy")
    - **Action**: Select **Allow** from dropdown
    - **Session duration**: Leave default (24 hours)
 
