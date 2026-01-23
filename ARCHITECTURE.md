@@ -49,7 +49,7 @@ User Device:
 ┌──────────────────────────────────────┐
 │  Cloudflare Gateway                  │ ← Checks if user is authenticated
 │  Network Policy Engine               │
-│                                       │
+│                                      │
 │  IF (user authenticated + posture OK)│
 │  THEN allow port 51820               │
 │  ELSE block                          │

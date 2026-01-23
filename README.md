@@ -65,9 +65,9 @@ User Device - BOTH Apps Running Simultaneously:
 │  Application 1: Cloudflare One Agent                         │
 │  Purpose: Authentication & Access Control                    │
 │  Status: Connected (runs in background)                      │
-│  ├─ User authenticated with 2FA: ✓                          │
-│  ├─ Device posture checks passed: ✓                         │
-│  └─ Grants permission to access WireGuard port              │
+│  ├─ User authenticated with 2FA: ✓                           │
+│  ├─ Device posture checks passed: ✓                          │
+│  └─ Grants permission to access WireGuard port               │
 └──────────────────────────────────────────────────────────────┘
                          │
                          │ Authentication Active
@@ -76,37 +76,37 @@ User Device - BOTH Apps Running Simultaneously:
 │  Application 2: WireGuard Client                             │
 │  Purpose: VPN Tunnel                                         │
 │  Status: User clicks "Connect"                               │
-│  ├─ Connects to VPS port 443/UDP (allowed by Zero Trust)   │
-│  │  (Appears as HTTPS/QUIC traffic - obfuscated)           │
-│  ├─ Establishes encrypted tunnel                            │
-│  └─ Routes all internet via VPS                             │
+│  ├─ Connects to VPS port 443/UDP (allowed by Zero Trust)     │
+│  │  (Appears as HTTPS/QUIC traffic - obfuscated)             │
+│  ├─ Establishes encrypted tunnel                             │
+│  └─ Routes all internet via VPS                              │
 └──────────────────────────────────────────────────────────────┘
                          │
                          │ VPN Traffic
                          ▼
 ┌──────────────────────────────────────────────────────────────┐
-│              Cloudflare Gateway (Policy Enforcement)          │
-│                                                               │
-│  IF (Cloudflare One Agent authenticated + posture OK)       │
-│     THEN allow traffic to WireGuard port (443/UDP)          │
-│  ELSE block connection                                        │
+│              Cloudflare Gateway (Policy Enforcement)         │
+│                                                              │
+│  IF (Cloudflare One Agent authenticated + posture OK)        │
+│     THEN allow traffic to WireGuard port (443/UDP)           │
+│  ELSE block connection                                       │
 └──────────────────────────────────────────────────────────────┘
                          │
                          │ Access Granted
                          ▼
         ┌────────────────────────────────────┐
         │  VPS Server (Your Infrastructure)  │
-        │                                     │
+        │                                    │
         │  ┌──────────────────────────────┐  │
         │  │ WireGuard Server (443/UDP)   │  │
-        │  │  - Accepts connections        │  │
-        │  │  - Routes internet traffic    │  │
+        │  │  - Accepts connections       │  │
+        │  │  - Routes internet traffic   │  │
         │  └──────────────────────────────┘  │
-        │                                     │
+        │                                    │
         │  ┌──────────────────────────────┐  │
         │  │ Cloudflare Tunnel (SSH/VNC)  │  │
-        │  │  - ssh.yourdomain.com         │  │
-        │  │  - vnc-*.yourdomain.com       │  │
+        │  │  - ssh.yourdomain.com        │  │
+        │  │  - vnc-*.yourdomain.com      │  │
         │  └──────────────────────────────┘  │
         └────────────────────────────────────┘
                          │
