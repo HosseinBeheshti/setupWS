@@ -767,7 +767,7 @@ Repeat for:
    CLOUDFLARE_ZONE_ID="your-zone-id"  # From Cloudflare dashboard
 
    # WireGuard Configuration
-   WG_SERVER_PUBLIC_IP="65.109.210.232"  # Your VPS IP
+   WG_SERVER_PUBLIC_IP="65.109.210.232"  # Your VPS IPv4 address (NOT IPv6!)
    WG_PORT="443"  # Obfuscated port (443/UDP appears as HTTPS/QUIC)
    WG_SUBNET="10.13.13.0/24"
    WG_DNS="1.1.1.1,1.0.0.1"
@@ -1362,6 +1362,46 @@ docker compose -f /root/setupWS/docker-compose-ztna.yml restart
 ## Part 7: Monitoring & Troubleshooting
 
 ### 7.1 Common Issues
+
+#### Issue: WireGuard import error "Cannot parse endpoint" (IPv6)
+
+**Symptoms:**
+- Mobile WireGuard app shows: "Unable to import tunnel: Cannot parse endpoint '2a01:4f9:...:51820'"
+- Config QR code won't scan properly
+
+**Cause:**
+- Your VPS has IPv6 enabled and `workstation.env` is using IPv6 address
+- WireGuard mobile apps have issues with some IPv6 address formats
+
+**Solution:**
+```bash
+# On your VPS, get your IPv4 address
+curl -4 ifconfig.me
+
+# Edit workstation.env
+nano workstation.env
+
+# Find this line:
+WG_SERVER_PUBLIC_IP=""
+
+# Change to your IPv4 address (example):
+WG_SERVER_PUBLIC_IP="65.109.210.232"
+
+# Regenerate WireGuard configs for all users
+cd /root/setupWS
+sudo ./add_wg_peer.sh username
+
+# Generate new QR code with IPv4
+cat /var/lib/ztna/clients/username/username.conf
+qrencode -t ansiutf8 < /var/lib/ztna/clients/username/username.conf
+```
+
+**Prevention:**
+- Always use IPv4 addresses in `WG_SERVER_PUBLIC_IP`
+- Don't leave it empty if your server has both IPv4 and IPv6
+- Mobile apps work better with IPv4 endpoints
+
+---
 
 #### Issue: WARP won't connect
 
