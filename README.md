@@ -345,46 +345,62 @@ Users will need your **team name** to enroll devices:
 
 ### 1.3 Create Device Posture Checks
 
-**Navigation:** Cloudflare One Dashboard → **Devices** → **Configure** (under Device posture)
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** → **Device posture**
 
-Create multiple posture checks for comprehensive security:
+Create multiple posture checks for comprehensive security. Each check type is configured separately:
 
-#### Check 1: Require WARP Connection
-1. Click **Add new** → **Require WARP**
-2. **Name**: WARP Connected
-3. Click **Save**
+#### Check 1: Require Gateway
+1. Click **Add new**
+2. Select **Require Gateway**
+3. **Name**: Enter "Gateway Connected"
+4. Click **Save**
+
+This ensures the device is connected to your Zero Trust organization through WARP.
 
 #### Check 2: OS Version (Windows example)
-1. Click **Add new** → **OS Version**
-2. **Name**: Windows 10 Minimum
-3. **Platform**: Windows
-4. **Operator**: greater than or equal to
-5. **Version**: `10.0.19041`
-6. Click **Save**
+1. Click **Add new**
+2. Select **OS version**
+3. **Name**: Enter "Windows 10 Minimum"
+4. **Operating system**: Select **Windows**
+5. **Operator**: Select **>=** (greater than or equal to)
+6. **Version**: Enter `10.0.19041` (Windows 10 build 19041)
+7. Click **Save**
 
 #### Check 3: OS Version (macOS example)
-1. Click **Add new** → **OS Version**
-2. **Name**: macOS 12 Minimum
-3. **Platform**: macOS
-4. **Operator**: greater than or equal to
-5. **Version**: `12.0.0`
-6. Click **Save**
+1. Click **Add new**
+2. Select **OS version**
+3. **Name**: Enter "macOS 12 Minimum"
+4. **Operating system**: Select **macOS**
+5. **Operator**: Select **>=**
+6. **Version**: Enter `12.0.0`
+7. Click **Save**
 
 #### Check 4: Firewall Enabled
-1. Click **Add new** → **Firewall**
-2. **Name**: Firewall Enabled
-3. **Platform**: Windows or macOS
-4. **Check**: Firewall is enabled
-5. Click **Save**
+1. Click **Add new**
+2. Select **Firewall**
+3. **Name**: Enter "Firewall Enabled"
+4. **Operating system**: Select **Windows** or **macOS**
+5. **Check**: Firewall must be enabled
+6. Click **Save**
 
-#### Check 5: Disk Encryption (Optional but recommended)
-1. Click **Add new** → **Disk Encryption**
-2. **Name**: Disk Encrypted
-3. **Platform**: Windows or macOS
-4. **Check**: System drive is encrypted
-5. Click **Save**
+**Note:** Linux does not support firewall posture checks.
 
-**Note:** You'll use these posture checks in both Gateway and Access policies.
+#### Check 5: Disk Encryption (Recommended)
+1. Click **Add new**
+2. Select **Disk encryption**
+3. **Name**: Enter "Disk Encrypted"
+4. **Operating system**: Select **Windows**, **macOS**, or **Linux**
+5. **Check**: System drive must be encrypted
+6. Click **Save**
+
+**Verify Posture Checks:**
+After devices enroll, verify posture checks are working:
+1. Go to **Settings** → **WARP Client** → **Devices**
+2. Select a device → **View details**
+3. Click **Posture checks** tab
+4. Verify all checks show **Pass** status
+
+**Note:** You'll use these posture checks in Gateway Network Policies (Section 1.4).
 
 ---
 
