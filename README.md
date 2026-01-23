@@ -285,7 +285,7 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 ### 1.2 Enable Device Enrollment
 
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** → **Device enrollment**
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** (scroll down to Device enrollment section)
 
 #### Step 1: Configure Device Enrollment Permissions
 
@@ -345,7 +345,7 @@ Users will need your **team name** to enroll devices:
 
 As an admin, you can verify which email addresses (including Gmail) have enrolled devices:
 
-1. In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** → **Devices**
+1. In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Team & Resources** → **Devices**
 
 2. You'll see a list of all enrolled devices with the following information:
    - **Device name** (computer hostname)
@@ -380,7 +380,7 @@ As an admin, you can verify which email addresses (including Gmail) have enrolle
 
 ### 1.3 Create Device Posture Checks
 
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** → **Device posture**
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** (scroll down to Device posture section)
 
 Create multiple posture checks for comprehensive security. Each check type is configured separately:
 
@@ -430,7 +430,7 @@ This ensures the device is connected to your Zero Trust organization through WAR
 
 **Verify Posture Checks:**
 After devices enroll, verify posture checks are working:
-1. Go to **Settings** → **WARP Client** → **Devices**
+1. Go to **Team & Resources** → **Devices**
 2. Select a device → **View details**
 3. Click **Posture checks** tab
 4. Verify all checks show **Pass** status
