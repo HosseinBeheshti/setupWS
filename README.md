@@ -517,12 +517,11 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 
 **Step-by-step creation:**
 
-1. Click **Add a policy** button at the top
+1. Click **Add a network policy** button
 
 2. **Configure Basic Settings:**
    - **Policy name**: Enter "Allow Authenticated Users to WireGuard"
    - **Action**: Select **Allow** from dropdown
-   - Leave **Precedence** as default (it will be 1 for first policy)
 
 3. **Configure Traffic Conditions** (what traffic this applies to):
    
@@ -577,12 +576,11 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 
 **Step-by-step creation:**
 
-1. Click **Add a policy** button again
+1. Click **Add a network policy** button again
 
 2. **Configure Basic Settings:**
    - **Policy name**: Enter "Block Non-WARP WireGuard Access"
    - **Action**: Select **Block** from dropdown
-   - **Precedence**: Will be automatically set to 2 (after first policy)
 
 3. **Enable Block Notification:**
    - Scroll down to find **Display block notification**
@@ -615,10 +613,10 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 6. Click **Create policy**
 
 **⚠️ Critical: Policy Order**
-- Cloudflare evaluates policies from **top to bottom** (precedence 1, 2, 3...)
-- Your **Allow policy (1)** MUST be **ABOVE** the **Block policy (2)**
+- Cloudflare evaluates policies from **top to bottom**
+- Your **Allow policy** MUST be **ABOVE** the **Block policy**
 - If needed, drag and drop policies to reorder them in the UI
-- Users matching Policy 1 get access, everyone else gets blocked by Policy 2
+- Users matching the Allow policy get access, everyone else gets blocked by the Block policy
 
 **✅ Gateway Network Policies are now configured!**
 
