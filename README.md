@@ -285,11 +285,11 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 ### 1.2 Enable Device Enrollment
 
-**Navigation:** Cloudflare One Dashboard → **Team & Resources** → **Devices** → **Device profiles** → **Management**
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** → **Device enrollment**
 
 #### Step 1: Configure Device Enrollment Permissions
 
-1. Under **Device enrollment** → **Device enrollment permissions**, click **Manage**
+1. In the **Device enrollment** section, click **Manage** under **Device enrollment permissions**
 
 2. In the **Policies** tab:
    - Click **Add a policy** button
