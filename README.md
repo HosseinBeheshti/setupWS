@@ -466,7 +466,7 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 
 #### Step B: Configure Split Tunnels (Critical!)
 
-**Navigation:** Cloudflare One Dashboard → **Team & Resources** → **Devices** → **Device profiles** → **Configure**
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Team & Resources** → **Devices** → **Device profiles**
 
 **IMPORTANT**: Configure split tunnels so Cloudflare One Agent and WireGuard don't conflict.
 
@@ -474,23 +474,40 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 - Cloudflare One Agent handles: Authentication + policy enforcement  
 - WireGuard handles: Actual internet traffic routing
 
-**Recommended Configuration - Exclude Mode:**
+**Step-by-step configuration:**
 
-| Type | Selector | Value | Purpose |
-|------|----------|-------|---------|
-| Exclude | IP Address | `10.13.13.0/24` | WireGuard tunnel subnet - CRITICAL! |
-| Exclude | IP Address | `<YOUR-VPS-IP>/32` | Your VPS IP (optional but recommended) |
-| Exclude | IP Address | `192.168.0.0/16` | Local network |
-| Exclude | IP Address | `10.0.0.0/8` | Private network |
-| Exclude | IP Address | `172.16.0.0/12` | Private network |
+1. Under **Profiles**, locate the device profile (usually **Default**) and click **Configure**
 
-**Why exclude WireGuard subnet?**
-- Prevents Cloudflare One Agent from routing WireGuard's traffic
-- WireGuard routes ALL internet traffic (including to 10.13.13.0/24)
-- Cloudflare One Agent only checks authentication, doesn't route traffic
-- This avoids routing loops and conflicts
+2. Scroll down to **Split Tunnels** section
 
-Click **Save settings**
+3. Under **Split Tunnels**, verify the mode is set to **Exclude IPs and domains** (this is the default)
+   - This means all traffic goes through Gateway EXCEPT what you exclude
+   - We'll exclude WireGuard traffic from Gateway
+
+4. Click **Manage** to configure excluded routes
+
+5. Add the following exclusions by clicking **Add destination**:
+
+   **Critical Exclusion - WireGuard Subnet:**
+   - Select **IP Address**
+   - Enter: `10.13.13.0/24`
+   - Select **Save destination**
+   - **Why**: Prevents Cloudflare One Agent from routing WireGuard's traffic. WireGuard routes ALL internet traffic (including to this subnet). This avoids routing loops.
+
+   **Recommended Exclusion - Your VPS IP:**
+   - Select **IP Address**
+   - Enter: `<YOUR-VPS-IP>/32` (e.g., `65.109.210.232/32`)
+   - Select **Save destination**
+   - **Why**: Allows direct WireGuard connection to VPS without Gateway inspection
+
+   **Default Exclusions (already present):**
+   - `192.168.0.0/16` - Local network
+   - `10.0.0.0/8` - Private network  
+   - `172.16.0.0/12` - Private network
+
+6. Click **Save profile**
+
+**Note**: It may take up to 10 minutes for settings to propagate to devices.
 
 #### Step C: Create Gateway Network Policies
 
