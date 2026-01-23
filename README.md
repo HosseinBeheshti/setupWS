@@ -548,10 +548,12 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
    
    Click **Add condition** under Identity section:
    
-   - Selector: Select **Login Methods**
-   - Operator: Select **is**
-   - Value: Select **One-time PIN**
+   - Selector: Select **User Email**
+   - Operator: Select **matches regex**
+   - Value: Enter `.*` (matches any authenticated user with an email)
    - Click **And** to add device posture check
+   
+   **Note**: Network policies don't have a "Login Methods" selector. Since you're using One-time PIN authentication, any user who successfully enrolled (regardless of email) will be authenticated. This regex matches all authenticated users.
 
 5. **Configure Device Posture Conditions** (device whitelist):
    
@@ -567,9 +569,9 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 6. Click **Create policy**
 
 **This policy enforces:**
-- ✅ User must have authenticated via One-time PIN (any email including Gmail)
+- ✅ User must be authenticated via Cloudflare One Agent (enrolled with any email including Gmail)
 - ✅ Device must pass ALL posture checks (OS version, firewall, disk encryption, etc.)
-- ✅ Device must be connected to Cloudflare One Agent
+- ✅ Device must be connected to Cloudflare One Agent (Gateway Connected posture check)
 - ✅ Only allows access to WireGuard port 443/UDP on your VPS IP
 
 ##### Policy 2: Block All Other Traffic to WireGuard (Deny by Default)
