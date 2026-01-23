@@ -289,25 +289,24 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 1. Under **Device enrollment** → **Device enrollment permissions**, click **Manage**
 
-2. In the **Policies** tab, configure [Access policies](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/) to define who can enroll devices:
-   - Click **Add a rule**
-   - **Rule name**: "Allow Company Devices"
-   - **Example policy for email domain:**
-     | Selector | Operator | Value |
-     |----------|----------|-------|
-     | Include | Emails ending in | `@yourcompany.com` |
-   - Or use **Include** → **Everyone** for testing
-   - Click **Save**
+2. In the **Policies** tab, configure who can enroll devices:
    
-   **Note:** Device posture checks are NOT supported in device enrollment policies. WARP can only perform posture checks after the device is enrolled.
+   **Policy Configuration for One-Time PIN (Gmail users):**
+   
+   | Action | Rule Type | Selector | Value |
+   |--------|-----------|----------|-------|
+   | Allow | Include | Login Methods | One-time PIN |
+   
+   This allows anyone with a Gmail account to enroll by receiving a PIN code to their email.
+   
+   **⚠️ Important:** Device posture checks are NOT supported in device enrollment policies. Device posture can only be enforced AFTER enrollment (see Section 1.4 Gateway Network Policies).
 
 3. In the **Login methods** tab:
-   - Select your configured [Identity Provider(s)](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/)
-   - If no IdP integrated, you can use [one-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)
-   - (Optional) Enable **Instant Auth** if using single IdP - users skip Cloudflare Access login page and go directly to SSO
+   - Enable **One-time PIN** (this sends a PIN code to user's email)
+   - Optionally enable **Google** if you want to allow Google OAuth login
    - Click **Save**
 
-4. **Users can now enroll** by logging in to your identity provider
+4. **Users can now enroll** by entering their Gmail address and receiving a one-time PIN
 
 **Your Team Name for Enrollment:**
 - Users will need your **team name** to enroll devices
@@ -439,15 +438,20 @@ Click **Save settings**
 | **AND** Destination Port | is | **443** (or your configured WG_PORT) |
 | **AND** Protocol | is | UDP |
 
-**Identity Conditions:**
+**Identity Conditions (One-time PIN users):**
 | Selector | Operator | Value |
 |----------|----------|-------|
-| **AND** User Email | matches regex | `.*@yourcompany.com` (or specific emails) |
+| **AND** Login Methods | is | One-time PIN |
 
-**Device Posture Conditions:**
+**Device Posture Conditions (Whitelist):**
 | Selector | Operator | Value |
 |----------|----------|-------|
 | **AND** Passed Device Posture Checks | in | [Select all posture checks created in 1.3] |
+
+This enforces:
+- ✅ User must have authenticated via One-time PIN (Gmail)
+- ✅ Device must pass ALL posture checks (OS version, firewall, etc.)
+- ✅ Device must be connected to Cloudflare One Agent
 
 Click **Create policy**
 
