@@ -285,7 +285,7 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 
 ### 1.2 Enable Device Enrollment
 
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** (scroll down to Device enrollment section)
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** page and find the **WARP Client** tab at the top of the page
 
 #### Step 1: Configure Device Enrollment Permissions
 
@@ -380,7 +380,7 @@ As an admin, you can verify which email addresses (including Gmail) have enrolle
 
 ### 1.3 Create Device Posture Checks
 
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** → **WARP Client** (scroll down to Device posture section)
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Reusable components** (in left sidebar) → **Posture checks**
 
 Create multiple posture checks for comprehensive security. Each check type is configured separately:
 
