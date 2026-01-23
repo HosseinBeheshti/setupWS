@@ -454,7 +454,7 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 
 #### Step A: Enable Network Filtering
 
-**Navigation:** Cloudflare One Dashboard → **Traffic policies** → **Traffic settings**
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Traffic policies** → **Traffic settings**
 
 1. Scroll to **Network filtering** section
 2. Enable: **Allow Secure Web Gateway to proxy traffic**
@@ -511,7 +511,7 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
 
 #### Step C: Create Gateway Network Policies
 
-**Navigation:** Cloudflare One Dashboard → **Traffic policies** → **Network**
+**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Traffic policies** → **Firewall policies** → **Network** tab
 
 ##### Policy 1: Allow Authenticated Users to WireGuard
 
