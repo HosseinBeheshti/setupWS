@@ -642,38 +642,58 @@ This is the critical step that protects your WireGuard port with Zero Trust auth
    - Copy the token shown (starts with `eyJh...`)
    - **Save this token** - you'll need it in Part 2 for VPS setup
    - Example: `eyJhIjoiODQ5YTNlZjA0NDVlNmFhNjFlOTcyMmQ5MTgxZDY5ZDQi...`
+   - Click **Next** to continue
 
 5. **Configure public hostname routes:**
    
-   Click **Published applications** tab and add:
+   **⚠️ IMPORTANT - DNS Record Conflicts:**
+   Before adding routes, check if DNS records already exist for these hostnames:
+   1. Go to your Cloudflare dashboard → Select your domain → **DNS** → **Records**
+   2. Look for existing A, AAAA, or CNAME records for: `ssh`, `vnc-hossein`, `vnc-asal`, `vnc-hassan`
+   3. **Delete any existing records** for these hostnames before creating tunnel routes
+   4. Cloudflare Tunnel will automatically create CNAME records pointing to your tunnel
+   
+   In the tunnel configuration, select **Public Hostname** tab and add routes:
 
    **SSH Access:**
-   - Public hostname: `ssh.yourdomain.com`
+   - Click **Add a public hostname**
+   - Subdomain: `ssh`
+   - Domain: Select `yourdomain.com` from dropdown
+   - Path: Leave empty
    - Service Type: `SSH`
    - URL: `localhost:22`
-   - Click **Save**
+   - Click **Save hostname**
 
    **VNC Applications** (repeat for each user):
    
    User 1:
-   - Public hostname: `vnc-hossein.yourdomain.com`
+   - Click **Add a public hostname**
+   - Subdomain: `vnc-hossein`
+   - Domain: Select `yourdomain.com` from dropdown
+   - Path: Leave empty
    - Service Type: `HTTP`
    - URL: `localhost:1370`
-   - Save
+   - Click **Save hostname**
 
    User 2:
-   - Public hostname: `vnc-asal.yourdomain.com`
+   - Click **Add a public hostname**
+   - Subdomain: `vnc-asal`
+   - Domain: Select `yourdomain.com` from dropdown
+   - Path: Leave empty
    - Service Type: `HTTP`
    - URL: `localhost:1377`
-   - Save
+   - Click **Save hostname**
 
    User 3:
-   - Public hostname: `vnc-hassan.yourdomain.com`
+   - Click **Add a public hostname**
+   - Subdomain: `vnc-hassan`
+   - Domain: Select `yourdomain.com` from dropdown
+   - Path: Leave empty
    - Service Type: `HTTP`
    - URL: `localhost:1380`
-   - Save
+   - Click **Save hostname**
 
-6. Click **Save tunnel**
+6. Click **Save tunnel** (bottom of page)
 
 **Note:** Tunnel will show **Down** status until you set up the VPS server in Part 2.
 
