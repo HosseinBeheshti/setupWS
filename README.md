@@ -236,10 +236,10 @@ Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel �
 **For ALL Users - TWO applications required:**
 
 1. **Cloudflare One Agent** (Authentication layer)
-   - Desktop: https://1.1.1.1/
-   - iOS: https://apps.apple.com/app/id1423538627
-   - Android: https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotonedotone
-   - **Note**: This is the enterprise version (Zero Trust), NOT the consumer 1.1.1.1 app
+   - Desktop: https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/
+   - iOS: https://apps.apple.com/app/cloudflare-one-agent/id6443476492
+   - Android: https://play.google.com/store/apps/details?id=com.cloudflare.cloudflareoneagent
+   - **Note**: Download "Cloudflare One Agent" app, NOT the old "1.1.1.1: Faster Internet" consumer app
 
 2. **WireGuard Client** (VPN layer)
    - Desktop: https://www.wireguard.com/install/
@@ -704,14 +704,15 @@ systemctl status vncserver-hassan@3.service
 
 #### Windows/macOS/Linux
 
-1. **Download WARP Client:**
-   - Visit: https://1.1.1.1/
+1. **Download Cloudflare One Agent:**
+   - Visit: https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/
+   - Select **"Cloudflare WARP for managed deployment"** (enterprise version)
    - Click **Download** for your operating system
    - Install the application
 
-2. **Open WARP:**
-   - Launch the Cloudflare WARP application
-   - Click the Cloudflare logo in system tray
+2. **Open Cloudflare One Agent:**
+   - Launch the **Cloudflare One Agent** application
+   - Click the Cloudflare logo in system tray (Windows/Linux) or menu bar (macOS)
 
 3. **Enroll in Zero Trust:**
    - Click Settings (gear icon) → **Preferences** → **Account**
@@ -723,11 +724,12 @@ systemctl status vncserver-hassan@3.service
    - Browser will open
    - Login with your email
    - **Complete 2FA** (enter OTP code from authenticator app)
-   - Click **Open Cloudflare WARP.app** when prompted
+   - Click **Open Cloudflare One Agent** when prompted
 
 5. **Connect:**
-   - WARP will automatically connect
+   - Cloudflare One Agent will automatically connect
    - Status should show **Connected**
+   - You are now authenticated and enrolled in Zero Trust
 
 6. **Verify Enrollment:**
    ```bash
@@ -766,8 +768,9 @@ warp-cli status
 #### iOS/Android
 
 1. **Download Cloudflare One Agent:**
-   - iOS: https://apps.apple.com/app/id1423538627
-   - Android: https://play.google.com/store/apps/details?id=com.cloudflare.onedotonedotonedotone
+   - iOS: https://apps.apple.com/app/cloudflare-one-agent/id6443476492
+   - Android: https://play.google.com/store/apps/details?id=com.cloudflare.cloudflareoneagent
+   - **Important**: Install "Cloudflare One Agent", NOT the old "1.1.1.1" consumer app
 
 2. **Open App:**
    - Tap **Next** to start
@@ -1455,7 +1458,7 @@ You now have a complete Zero Trust architecture where:
 
 - **Cloudflare One Documentation:** https://developers.cloudflare.com/cloudflare-one/
 - **WireGuard Documentation:** https://www.wireguard.com/
-- **WARP Client Download:** https://1.1.1.1/
+- **Cloudflare One Agent Download:** https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/
 - **Support:** https://community.cloudflare.com/
 
 ---

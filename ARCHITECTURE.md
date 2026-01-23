@@ -37,7 +37,7 @@
 ```
 User Device:
 ┌──────────────────────────────────────┐
-│  Cloudflare One Agent (WARP)         │ ← Always running, provides authentication
+│  Cloudflare One Agent                │ ← Always running, provides authentication
 │  Status: Connected                   │
 │  - User authenticated (2FA)          │
 │  - Device posture: PASS              │
@@ -127,7 +127,7 @@ User → Ensures Cloudflare One Agent is running →
 
 ## Split Tunnel Configuration
 
-**Important**: Configure split tunnels so WARP and WireGuard don't conflict:
+**Important**: Configure split tunnels so Cloudflare One Agent and WireGuard don't conflict:
 
 ### Cloudflare One Agent Split Tunnel
 Configure to EXCLUDE WireGuard subnet:
@@ -139,7 +139,7 @@ Exclude Mode:
 ```
 
 This ensures:
-- WARP handles authentication
+- Cloudflare One Agent handles authentication
 - WireGuard handles actual VPN routing
 - No routing conflicts
 
