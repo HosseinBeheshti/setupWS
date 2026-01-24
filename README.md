@@ -1,1683 +1,895 @@
-# Cloudflare Zero Trust + WireGuard VPN Setup Guide
+# Cloudflare Zero Trust Network Access (ZTNA) Setup
 
-This guide provides complete step-by-step instructions for deploying **Cloudflare Zero Trust** as an authentication layer for **WireGuard VPN** on your VPS.
-
-## 🎯 Architecture: Two-Layer Security Model
-
-**Layer 1: Cloudflare One Agent (Zero Trust) - AUTHENTICATION & ACCESS CONTROL**
-- Authenticates user identity with 2FA
-- Checks device health (OS version, firewall, encryption)
-- Enforces corporate security policies
-- Controls access to WireGuard service (configurable UDP port)
-  - Default: 443/UDP (obfuscated for Iran - appears as HTTPS/QUIC)
-  - Alternatives: 53/UDP (DNS), 123/UDP (NTP), high ports (40000-50000)
-  - **Note:** Default 51820 is blocked in Iran
-
-**Layer 2: WireGuard VPN - ACTUAL VPN TUNNEL**
-- Provides secure VPN connection
-- Routes internet traffic through VPS
-- Masks user's IP address
-- Fast, modern VPN protocol
-
-## 🔑 Key Concept
-
-**Cloudflare One Agent ≠ VPN**  
-It's an authentication/policy enforcement tool, NOT a VPN replacement.
-
-**Users run BOTH applications simultaneously:**
-1. **Cloudflare One Agent** (runs in background) - Provides authentication
-2. **WireGuard app** (user activates) - Provides VPN tunnel
-
-**If Cloudflare One Agent is not running or user fails authentication:**
-→ WireGuard connection to configured port (default 443/UDP) is **BLOCKED** by Cloudflare Gateway
-
-## Table of Contents
-
-- [Architecture Overview](#architecture-overview)
-- [Understanding the Components](#understanding-the-components)
-- [Prerequisites](#prerequisites)
-- [Part 1: Cloudflare Zero Trust Setup](#part-1-cloudflare-zero-trust-setup)
-  - [1.1 Configure Identity Provider with 2FA](#11-configure-identity-provider-with-2fa)
-  - [1.2 Enable Device Enrollment](#12-enable-device-enrollment)
-  - [1.3 Create Device Posture Checks](#13-create-device-posture-checks)
-  - [1.4 Create Gateway Network Policy for WireGuard](#14-create-gateway-network-policy-for-wireguard)
-  - [1.5 Create Cloudflare Tunnel](#15-create-cloudflare-tunnel)
-  - [1.6 Create Access Applications for SSH/VNC](#16-create-access-applications-for-sshvnc)
-- [Part 2: VPS Server Setup](#part-2-vps-server-setup)
-- [Part 3: Device Enrollment (All Users)](#part-3-device-enrollment-all-users)
-  - [3.1 Desktop/Laptop Enrollment](#31-desktoplaptop-enrollment)
-  - [3.2 Mobile Device Enrollment](#32-mobile-device-enrollment)
-- [Part 4: Using Services After Enrollment](#part-4-using-services-after-enrollment)
-  - [4.1 WireGuard VPN Access](#41-wireguard-vpn-access)
-  - [4.2 SSH Access](#42-ssh-access)
-  - [4.3 VNC Access](#43-vnc-access)
-- [Part 5: Admin Workflows](#part-5-admin-workflows)
-- [Part 6: Backup & Recovery](#part-6-backup--recovery)
-- [Part 7: Monitoring & Troubleshooting](#part-7-monitoring--troubleshooting)
-
----
+Route all user traffic through your VPS using **Cloudflare One Agent + WARP Connector**.
 
 ## Architecture Overview
 
 ```
-User Device - BOTH Apps Running Simultaneously:
-┌──────────────────────────────────────────────────────────────┐
-│  Application 1: Cloudflare One Agent                         │
-│  Purpose: Authentication & Access Control                    │
-│  Status: Connected (runs in background)                      │
-│  ├─ User authenticated with 2FA: ✓                           │
-│  ├─ Device posture checks passed: ✓                          │
-│  └─ Grants permission to access WireGuard port               │
-└──────────────────────────────────────────────────────────────┘
-                         │
-                         │ Authentication Active
-                         ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Application 2: WireGuard Client                             │
-│  Purpose: VPN Tunnel                                         │
-│  Status: User clicks "Connect"                               │
-│  ├─ Connects to VPS port 443/UDP (allowed by Zero Trust)     │
-│  │  (Appears as HTTPS/QUIC traffic - obfuscated)             │
-│  ├─ Establishes encrypted tunnel                             │
-│  └─ Routes all internet via VPS                              │
-└──────────────────────────────────────────────────────────────┘
-                         │
-                         │ VPN Traffic
-                         ▼
-┌──────────────────────────────────────────────────────────────┐
-│              Cloudflare Gateway (Policy Enforcement)         │
-│                                                              │
-│  IF (Cloudflare One Agent authenticated + posture OK)        │
-│     THEN allow traffic to WireGuard port (443/UDP)           │
-│  ELSE block connection                                       │
-└──────────────────────────────────────────────────────────────┘
-                         │
-                         │ Access Granted
-                         ▼
-        ┌────────────────────────────────────┐
-        │  VPS Server (Your Infrastructure)  │
-        │                                    │
-        │  ┌──────────────────────────────┐  │
-        │  │ WireGuard Server (443/UDP)   │  │
-        │  │  - Accepts connections       │  │
-        │  │  - Routes internet traffic   │  │
-        │  └──────────────────────────────┘  │
-        │                                    │
-        │  ┌──────────────────────────────┐  │
-        │  │ Cloudflare Tunnel (SSH/VNC)  │  │
-        │  │  - ssh.yourdomain.com        │  │
-        │  │  - vnc-*.yourdomain.com      │  │
-        │  └──────────────────────────────┘  │
-        └────────────────────────────────────┘
-                         │
-                         ▼
-                    Internet
+User Device                    Cloudflare Network          Your VPS (Germany)
+┌──────────────┐              ┌─────────────────┐         ┌──────────────┐
+│ Cloudflare   │              │   Zero Trust    │         │     WARP     │
+│  One Agent   │─────────────▶│   Gateway       │────────▶│  Connector   │───▶ Internet
+│              │  Encrypted   │  (Authentication)│ Routed  │              │    (Exit IP: VPS)
+└──────────────┘              └─────────────────┘         └──────────────┘
 ```
 
-### Traffic Flow
+**What this provides:**
+- ✅ **Zero Trust Authentication**: One-time PIN via Gmail
+- ✅ **Device Posture Checks**: OS version, firewall status, encryption
+- ✅ **VPS Exit IP**: All traffic exits through your German VPS (65.109.210.232)
+- ✅ **Works on ALL platforms**: Desktop (Windows/macOS/Linux) + Mobile (Android/iOS)
+- ✅ **No VPN conflicts**: Single app solution (Cloudflare One Agent)
+- ✅ **Obfuscated**: Looks like HTTPS traffic to Cloudflare
 
-**For WireGuard VPN:**
-```
-Cloudflare One Agent (background) → 2FA Auth → Posture Check → Gateway Policy (Allow WireGuard port) → WireGuard Client (VPN tunnel) → Internet via VPS
-```
-
-**For SSH/VNC:**
-```
-Browser → 2FA Auth → Posture Check → Access Policy → Cloudflare Tunnel → SSH/VNC on VPS
-```
+**Traffic Flow:**
+1. User installs **Cloudflare One Agent** (one app only)
+2. Authenticates with Gmail (One-time PIN)
+3. Device posture checked automatically
+4. All internet traffic routes: Device → Cloudflare → **WARP Connector on VPS** → Internet
+5. Exit IP shows VPS location (Germany)
 
 ---
 
-## Understanding the Components
+## Table of Contents
 
-### What Each Component Does
-
-| Component | Type | Purpose | User Interaction |
-|-----------|------|---------|------------------|
-| **Cloudflare One Agent** | Authentication Client | Verifies identity + device health | Install once, runs in background |
-| **WireGuard** | VPN Client | Actual VPN tunnel | User clicks "Connect" when needed |
-| **Cloudflare Gateway** | Cloud Service | Enforces access policies | Invisible to user |
-| **cloudflared Tunnel** | Server Daemon | Exposes SSH/VNC | No user interaction |
-
-### Critical Differences
-
-| Feature | Cloudflare One Agent | WireGuard |
-|---------|---------------------|-----------|
-| **Authentication** | ✅ Yes (2FA, email) | ❌ No |
-| **Device Posture** | ✅ Yes (OS, firewall, etc.) | ❌ No |
-| **Policy Enforcement** | ✅ Yes | ❌ No |
-| **VPN Tunnel** | ❌ No | ✅ Yes |
-| **Routes Internet** | ❌ No | ✅ Yes |
-| **IP Masking** | ❌ No | ✅ Yes |
-| **Always Running** | ✅ Yes (background) | No (user activates) |
-
-### Why Both Are Needed
-
-**Cloudflare One Agent alone:**
-- ❌ Cannot route internet traffic
-- ❌ Cannot mask IP address
-- ✅ Can authenticate users
-- ✅ Can enforce policies
-
-**WireGuard alone:**
-- ✅ Can route internet traffic
-- ✅ Can mask IP address
-- ❌ Cannot authenticate users
-- ❌ Anyone with config file can connect
-
-**Both together:**
-- ✅ Authenticates users (Cloudflare)
-- ✅ Routes traffic (WireGuard)
-- ✅ Enforces policies (Cloudflare)
-- ✅ Provides VPN (WireGuard)
-- ✅ Full Zero Trust security
-
-### User Experience Example
-
-**Old way (WireGuard only - INSECURE):**
-```
-1. User gets WireGuard config file
-2. User imports into WireGuard app
-3. User clicks "Connect"
-4. Internet routed through VPS
-
-❌ No identity check
-❌ Anyone with config can connect
-❌ No device health verification
-❌ Can't revoke access remotely
-```
-
-**New way (Zero Trust + WireGuard - SECURE):**
-```
-1. User enrolls with Cloudflare One Agent (one-time)
-   - Authenticates with 2FA
-   - Device posture checks run
-   
-2. Cloudflare One Agent runs in background (always)
-   - Continuously verifies identity
-   - Monitors device health
-   
-3. User gets WireGuard config (from admin)
-
-4. User opens WireGuard app and clicks "Connect"
-   - Cloudflare Gateway checks: Is user authenticated?
-   - If YES → Allow connection to WireGuard port (configured in workstation.env, default 443/UDP)
-   - If NO → Block connection
-   
-5. WireGuard tunnel established
-6. Internet routed through VPS
-
-✅ Identity verified continuously
-✅ Device health checked
-✅ Admin can revoke access instantly
-✅ Full audit log of connections
-```
+- [Prerequisites](#prerequisites)
+- [Part 1: Cloudflare Zero Trust Setup](#part-1-cloudflare-zero-trust-setup)
+  - [1.1 Configure Identity Provider with One-time PIN](#11-configure-identity-provider-with-one-time-pin)
+  - [1.2 Enable Device Enrollment](#12-enable-device-enrollment)
+  - [1.3 Create Device Posture Checks](#13-create-device-posture-checks)
+  - [1.4 Create Gateway Network Policy](#14-create-gateway-network-policy)
+  - [1.5 Create Cloudflare Tunnel (SSH/VNC)](#15-create-cloudflare-tunnel-sshvnc)
+  - [1.6 Create Access Applications](#16-create-access-applications)
+- [Part 2: VPS Server Setup](#part-2-vps-server-setup)
+  - [2.1 Install WARP Connector](#21-install-warp-connector)
+  - [2.2 Configure Split Tunnels](#22-configure-split-tunnels)
+  - [2.3 (Optional) L2TP VPN for Infrastructure](#23-optional-l2tp-vpn-for-infrastructure)
+- [Part 3: Client Device Setup](#part-3-client-device-setup)
+  - [3.1 Install Cloudflare One Agent](#31-install-cloudflare-one-agent)
+  - [3.2 Authenticate and Connect](#32-authenticate-and-connect)
+- [Part 4: Verification](#part-4-verification)
+- [Troubleshooting](#troubleshooting)
+- [Appendix: L2TP VPN Setup](#appendix-l2tp-vpn-setup)
 
 ---
 
 ## Prerequisites
 
-### Server Requirements
+### VPS Server
+- **Provider**: Any (Hetzner, DigitalOcean, AWS, etc.)
+- **OS**: Ubuntu 24.04 LTS
+- **RAM**: 2GB minimum (4GB recommended)
+- **Storage**: 20GB minimum
+- **Network**: Public IPv4 address
+- **Location**: Germany (for your use case)
+- **Your VPS IP**: `65.109.210.232`
 
-- **VPS with Ubuntu 22.04 or 24.04 LTS**
-- **Minimum:** 2 CPU cores, 4GB RAM, 50GB storage
-- **Root or sudo access**
-- **Public IP address**
-- **Open ports:** 22 (SSH), 443 (WireGuard obfuscated as HTTPS/QUIC)
+### Cloudflare Account
+- Free Cloudflare account
+- Zero Trust plan: **Free tier supports 50 users**
+- Domain managed by Cloudflare (for Tunnel access)
+- Team name: `noise-ztna` (yours)
 
-### Cloudflare Requirements
-
-- **Cloudflare account** (free tier is sufficient)
-- **Domain name** pointed to Cloudflare nameservers
-- **Cloudflare Zero Trust** account (free up to 50 users)
-
-### Client Requirements
-
-**For ALL Users - TWO applications required:**
-
-1. **Cloudflare One Agent** (Authentication layer)
-   - Desktop: https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/
-   - iOS: https://apps.apple.com/app/cloudflare-one-agent/id6443476492
-   - Android: https://play.google.com/store/apps/details?id=com.cloudflare.cloudflareoneagent
-   - **Note**: Download "Cloudflare One Agent" app, NOT the old "1.1.1.1: Faster Internet" consumer app
-
-2. **WireGuard Client** (VPN layer)
-   - Desktop: https://www.wireguard.com/install/
-   - iOS: https://apps.apple.com/app/wireguard/id1441195209
-   - Android: https://play.google.com/store/apps/details?id=com.wireguard.android
-
-**Also Required:**
-- **Authenticator app** for 2FA (Google Authenticator, Authy, Microsoft Authenticator)
-
-**Additional for Admins:**
-- **VNC client** (optional, can use browser)
-- **SSH client** (optional, can use browser)
+### Required Access
+- Root/sudo access to VPS
+- Cloudflare dashboard admin access
+- User Gmail accounts for authentication
 
 ---
 
 ## Part 1: Cloudflare Zero Trust Setup
 
-### 1.1 Configure Identity Provider with 2FA
+### 1.1 Configure Identity Provider with One-time PIN
 
-**Navigation:** Cloudflare One Dashboard → **Integrations** → **Identity providers**
+This configures Gmail authentication with one-time PIN (no OAuth consent screen needed).
 
-1. Click **Add new identity provider**
-
-2. **Choose authentication method:**
-
-   **Option A: One-Time PIN (Recommended for quick setup)**
-   - Select **One-time PIN**
+1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
+2. Navigate to: **Settings → Authentication**
+3. Under **Login methods**, click **Add new**
+4. Select: **One-time PIN**
+5. Configure:
+   - **Name**: `Gmail One-time PIN`
    - Click **Save**
-   - **Important**: This method sends email codes. For stronger security, use Option B.
 
-   **Option B: Enterprise IdP with MFA (Recommended for production)**
-   - Select your IdP: **Okta**, **Microsoft Entra ID**, **Google Workspace**, etc.
-   - Follow provider-specific setup instructions
-   - **Critical**: Enable MFA in your IdP settings (Okta/Azure/Google)
-   - Cloudflare will validate that users authenticated with MFA
-   - Click **Save** and **Test** to verify
-
-3. **Verify 2FA is enforced:**
-   - In your Identity Provider settings, ensure MFA is **required** (not optional)
-   - Users should be prompted for 2FA every login
+**How it works:**
+- User enters their Gmail address
+- Cloudflare sends a 6-digit PIN to their Gmail
+- User enters PIN to authenticate
+- No OAuth consent screen required
 
 ---
 
 ### 1.2 Enable Device Enrollment
 
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Settings** page and find the **WARP Client** tab at the top of the page
+Configure which devices can enroll in your Zero Trust network.
 
-#### Step 1: Configure Device Enrollment Permissions
+1. Go to: **Settings → WARP Client** tab
+2. Scroll to: **Device enrollment**
+3. Click: **Manage**
+4. Under **Device enrollment permissions**, click **Add a rule**
+5. Configure:
+   - **Rule name**: `Allow Gmail Users`
+   - **Rule action**: `Allow`
+   - **Selector**: `Emails ending in` 
+   - **Value**: `gmail.com`
+   - Click **Save**
 
-1. In the **Device enrollment** section, click **Manage** under **Device enrollment permissions**
-
-2. In the **Policies** tab:
-   - Click **Add a policy** button
-   - **Policy name**: Enter a name (e.g., "User Policy")
-   - **Action**: Select **Allow** from dropdown
-   - **Session duration**: Leave default (24 hours)
-
-3. **Add Include selector** (who can enroll):
-   - You'll see selector configuration section
-   - Click **Include** (this is the logic type, like OR operator)
-   - **Selector**: Select **Login Methods** from dropdown
-   - **Value**: Select **One-time PIN** from dropdown
-   
-   This allows anyone with an email address to enroll by receiving a PIN code.
-
-4. Click **Save policy**
-
-**⚠️ Important:** Device posture checks are NOT supported in device enrollment policies. Device posture can only be enforced AFTER enrollment (see Section 1.4 Gateway Network Policies).
-
-#### Step 2: Configure Login Methods
-
-1. In the **Login methods** tab:
-   - Find **One-time PIN** in the list
-   - Click the toggle or checkbox to **Enable** it
-   - This allows users to receive a PIN code to their email (including Gmail)
-   - (Optional) Also enable **Google** if you want to allow Google OAuth login
-   
-2. Click **Save** at the bottom of the page
-
-#### Step 3: Note Your Team Name
-
-Users will need your **team name** to enroll devices:
-- Your team name is visible in the Cloudflare One dashboard URL
-- Format: `https://<your-team-name>.cloudflareaccess.com`
-- Example: If your URL is `mycompany-ztna.cloudflareaccess.com`, your team name is `mycompany-ztna`
-- Share this team name with users for enrollment
-
-#### Step 4: (Optional) Prevent Users from Leaving Organization
-
-1. Go to **Team & Resources** → **Devices** → **Device profiles** → **Default**
-2. Click **Settings** tab
-3. Find **Allow device to leave organization**
-4. Toggle it to **Disabled**
-5. Click **Save**
-
-**✅ Device enrollment is now enabled!** Users can enroll by:
-1. Opening Cloudflare One Agent
-2. Entering team name
-3. Entering their email (any email including Gmail)
-4. Receiving and entering the one-time PIN code
-
-#### Step 5: Verify Enrolled Devices and User Emails (Admin)
-
-As an admin, you can verify which email addresses (including Gmail) have enrolled devices:
-
-1. In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Team & Resources** → **Devices**
-
-2. You'll see a list of all enrolled devices with the following information:
-   - **Device name** (computer hostname)
-   - **Email** - The Gmail or email address used during enrollment
-   - **User** - The user identity
-   - **Status** - Active/Revoked
-   - **Last seen** - When device last connected
-
-3. To view detailed information about a specific enrollment:
-   - Click on the device name
-   - Select **View details**
-   - You'll see:
-     - **Users** tab: Shows which email enrolled this device
-     - **Posture checks** tab: Device security status
-     - **Device info** tab: OS, WARP version, IP address
-
-4. To search for a specific Gmail address:
-   - Use the search box at the top
-   - Enter the Gmail address (e.g., `user@gmail.com`)
-   - See all devices enrolled with that email
-
-**Admin Actions:**
-- ✅ View all enrolled devices and their Gmail addresses
-- ✅ Revoke access for specific email/device combinations
-- ✅ Delete device registrations
-- ✅ Check device posture status
-- ✅ See last connection time and IP address
-
-**Note:** With One-time PIN authentication, users can enroll with any email address. The email is visible to admins in the device list for verification and management.
+**Result:** Any user with a Gmail address can enroll their device.
 
 ---
 
 ### 1.3 Create Device Posture Checks
 
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Reusable components** (in left sidebar) → **Posture checks**
+Enforce security requirements on user devices.
 
-Create multiple posture checks for comprehensive security. Each check type is configured separately:
+#### Navigate to Device Posture
+1. Go to: **Reusable components → Posture checks**
+2. Click: **Add new**
 
-#### Check 1: Require Gateway
-1. Click **Add new**
-2. Select **Require Gateway**
-3. **Name**: Enter "Gateway Connected"
-4. Click **Save**
-
-This ensures the device is connected to your Zero Trust organization through WARP.
-
-#### Check 2: OS Version (Windows example)
-1. Click **Add new**
-2. Select **OS version**
-3. **Name**: Enter "Windows 10 Minimum"
-4. **Operating system**: Select **Windows**
-5. **Operator**: Select **>=** (greater than or equal to)
-6. **Version**: Enter `10.0.19041` (Windows 10 build 19041)
-7. Click **Save**
-
-#### Check 3: OS Version (macOS example)
-1. Click **Add new**
-2. Select **OS version**
-3. **Name**: Enter "macOS 12 Minimum"
-4. **Operating system**: Select **macOS**
-5. **Operator**: Select **>=**
-6. **Version**: Enter `12.0.0`
-7. Click **Save**
-
-#### Check 4: Firewall Enabled
-1. Click **Add new**
-2. Select **Firewall**
-3. **Name**: Enter "Firewall Enabled"
-4. **Operating system**: Select **Windows** or **macOS**
-5. **Check**: Firewall must be enabled
+#### Create OS Version Check
+1. **Check name**: `OS Version Check`
+2. **Check type**: `OS version`
+3. **Operating system**: `macOS` (repeat for Windows, Linux, Android, iOS)
+4. **Operator**: `>=`
+5. **Version**: 
+   - macOS: `13.0` (Ventura or newer)
+   - Windows: `10.0.19041` (Windows 10 20H1 or newer)
+   - Linux: Any modern kernel `5.0+`
+   - Android: `10.0`
+   - iOS: `15.0`
 6. Click **Save**
 
-**Note:** Linux does not support firewall posture checks.
-
-#### Check 5: Disk Encryption (Recommended)
-1. Click **Add new**
-2. Select **Disk encryption**
-3. **Name**: Enter "Disk Encrypted"
-4. **Operating system**: Select **Windows**, **macOS**, or **Linux**
-5. **Check**: System drive must be encrypted
-6. Click **Save**
-
-**Verify Posture Checks:**
-After devices enroll, verify posture checks are working:
-1. Go to **Team & Resources** → **Devices**
-2. Select a device → **View details**
-3. Click **Posture checks** tab
-4. Verify all checks show **Pass** status
-
-**Note:** You'll use these posture checks in Gateway Network Policies (Section 1.4).
-
----
-
-### 1.4 Create Gateway Network Policy for WireGuard
-
-This is the critical step that protects your WireGuard port with Zero Trust authentication.
-
-**⚠️ PORT CONFIGURATION**: The default WireGuard port in this setup is **443/UDP** (obfuscated for Iran). Update the policy below to match your configured `WG_PORT` in [workstation.env](workstation.env).
-
-**Port Options:**
-- **443/UDP** (recommended for Iran - appears as HTTPS/QUIC traffic)
-- **53/UDP** (DNS obfuscation)
-- **123/UDP** (NTP obfuscation)
-- High ports: 40000-50000/UDP
-- **Avoid 51820** (default WireGuard port, blocked in Iran)
-
-#### Step A: Enable Network Filtering
-
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Traffic policies** → **Traffic settings**
-
-1. Scroll to **Network filtering** section
-2. Enable: **Allow Secure Web Gateway to proxy traffic**
-3. Under **Proxy**, select protocols:
-   - ✅ TCP
-   - ✅ UDP
-   - ✅ ICMP (optional)
+#### Create Firewall Check
+1. **Check name**: `Firewall Enabled`
+2. **Check type**: `Firewall`
+3. **Enabled**: ✅ (checked)
 4. Click **Save**
 
-#### Step B: Configure Split Tunnels (Critical!)
+#### Create Disk Encryption Check
+1. **Check name**: `Disk Encryption`
+2. **Check type**: `Disk encryption`
+3. **Encryption detected**: ✅ (checked)
+4. Click **Save**
 
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Team & Resources** → **Devices** → **Device profiles**
-
-**IMPORTANT**: Configure split tunnels so Cloudflare One Agent and WireGuard don't conflict.
-
-**Goal**: 
-- Cloudflare One Agent handles: Authentication + policy enforcement  
-- WireGuard handles: Actual internet traffic routing
-
-**Step-by-step configuration:**
-
-1. Under **Profiles**, locate the device profile (usually **Default**) and click **Configure**
-
-2. Scroll down to **Split Tunnels** section
-
-3. Under **Split Tunnels**, verify the mode is set to **Exclude IPs and domains** (this is the default)
-   - This means all traffic goes through Gateway EXCEPT what you exclude
-   - We'll exclude WireGuard traffic from Gateway
-
-4. Click **Manage** to configure excluded routes
-
-5. Add the following exclusions by clicking **Add destination**:
-
-   **Critical Exclusion - WireGuard Subnet:**
-   - Select **IP Address**
-   - Enter: `10.13.13.0/24`
-   - Select **Save destination**
-   - **Why**: Prevents Cloudflare One Agent from routing WireGuard's traffic. WireGuard routes ALL internet traffic (including to this subnet). This avoids routing loops.
-
-   **Recommended Exclusion - Your VPS IP:**
-   - Select **IP Address**
-   - Enter: `<YOUR-VPS-IP>/32` (e.g., `65.109.210.232/32`)
-   - Select **Save destination**
-   - **Why**: Allows direct WireGuard connection to VPS without Gateway inspection
-
-   **Default Exclusions (already present):**
-   - `192.168.0.0/16` - Local network
-   - `10.0.0.0/8` - Private network  
-   - `172.16.0.0/12` - Private network
-
-6. Click **Save profile**
-
-**Note**: It may take up to 10 minutes for settings to propagate to devices.
-
-#### Step C: Create Gateway Network Policies
-
-**Navigation:** In [Cloudflare One](https://one.dash.cloudflare.com/), go to **Traffic policies** → **Firewall policies** → **Network** tab
-
-##### Policy 1: Allow Authenticated Users to WireGuard
-
-**Step-by-step creation:**
-
-1. Click **Add a network policy** button
-
-2. **Configure Basic Settings:**
-   - **Policy name**: Enter "Allow Authenticated Users to WireGuard"
-   - **Action**: Select **Allow** from dropdown
-
-3. **Configure Traffic Conditions** (what traffic this applies to):
-   
-   Click **Add condition** under Traffic section:
-   
-   - **First condition:**
-     - Selector: Select **Destination IP**
-     - Operator: Select **in**
-     - Value: Enter your VPS IP (e.g., `65.109.210.232`)
-     - Click **And** to add next condition
-   
-   - **Second condition:**
-     - Selector: Select **Destination Port**
-     - Operator: Select **is**
-     - Value: Enter **443** (or your configured WG_PORT from workstation.env)
-     - Click **And** to add next condition
-   
-   - **Third condition:**
-     - Selector: Select **Protocol**
-     - Operator: Select **is**
-     - Value: Select **UDP**
-
-4. **Configure Identity Conditions** (who can access):
-   
-   Click **Add condition** under Identity section:
-   
-   - Selector: Select **User Email**
-   - Operator: Select **matches regex**
-   - Value: Enter `.*` (matches any authenticated user with an email)
-   - Click **And** to add device posture check
-   
-   **Note**: Network policies don't have a "Login Methods" selector. Since you're using One-time PIN authentication, any user who successfully enrolled (regardless of email) will be authenticated. This regex matches all authenticated users.
-
-5. **Configure Device Posture Conditions** (device whitelist):
-   
-   - Selector: Select **Passed Device Posture Checks**
-   - Operator: Select **in**
-   - Value: Check ALL the posture checks you created in Section 1.3:
-     - ✅ WARP Connected
-     - ✅ Windows 10 Minimum (or your OS checks)
-     - ✅ Disk Encryption
-     - ✅ Firewall Enabled
-     - ✅ Domain Joined (if applicable)
-
-6. Click **Create policy**
-
-**This policy enforces:**
-- ✅ User must be authenticated via Cloudflare One Agent (enrolled with any email including Gmail)
-- ✅ Device must pass ALL posture checks (OS version, firewall, disk encryption, etc.)
-- ✅ Device must be connected to Cloudflare One Agent (Gateway Connected posture check)
-- ✅ Only allows access to WireGuard port 443/UDP on your VPS IP
-
-##### Policy 2: Block All Other Traffic to WireGuard (Deny by Default)
-
-**Step-by-step creation:**
-
-1. Click **Add a network policy** button again
-
-2. **Configure Basic Settings:**
-   - **Policy name**: Enter "Block Non-WARP WireGuard Access"
-   - **Action**: Select **Block** from dropdown
-
-3. **Enable Block Notification:**
-   - Scroll down to find **Display block notification**
-   - Toggle it to **Enabled**
-   - In **Custom notification** field, enter: `Access denied. Connect via Cloudflare One Agent with valid credentials.`
-
-4. **Configure Traffic Conditions** (what traffic to block):
-   
-   Click **Add condition** under Traffic section:
-   
-   - **First condition:**
-     - Selector: Select **Destination IP**
-     - Operator: Select **in**
-     - Value: Enter your VPS IP (e.g., `65.109.210.232`)
-     - Click **And**
-   
-   - **Second condition:**
-     - Selector: Select **Destination Port**
-     - Operator: Select **is**
-     - Value: Enter **443** (must match Policy 1)
-     - Click **And**
-   
-   - **Third condition:**
-     - Selector: Select **Protocol**
-     - Operator: Select **is**
-     - Value: Select **UDP**
-
-5. **Do NOT add Identity or Device Posture conditions** (we want to block everyone who doesn't match Policy 1)
-
-6. Click **Create policy**
-
-**⚠️ Critical: Policy Order**
-- Cloudflare evaluates policies from **top to bottom**
-- Your **Allow policy** MUST be **ABOVE** the **Block policy**
-- If needed, drag and drop policies to reorder them in the UI
-- Users matching the Allow policy get access, everyone else gets blocked by the Block policy
-
-**✅ Gateway Network Policies are now configured!**
+**Result:** Devices must pass these checks before connecting.
 
 ---
 
-### 1.5 Create Cloudflare Tunnel
+### 1.4 Create Gateway Network Policy
 
-**Navigation:** Cloudflare One Dashboard → **Networks** → **Connectors** → **Cloudflare Tunnels**
+This enforces that only authenticated users can route traffic through WARP Connector.
 
-1. Click **Create a tunnel**
+1. Go to: **Traffic policies → Firewall policies → Network** tab
+2. Click: **Add a policy**
+3. Configure:
+   - **Policy name**: `Allow Authenticated Users`
+   - **Selector**: `User Email`
+   - **Operator**: `matches regex`
+   - **Value**: `.*` (matches all Gmail addresses)
+   - **Action**: `Allow`
+4. Under **Device posture**, add the posture checks:
+   - ✅ OS Version Check
+   - ✅ Firewall Enabled
+   - ✅ Disk Encryption
+5. Click **Save**
 
-2. **Select connector type:** Cloudflared
-
-3. **Name your tunnel:**
-   ```
-   Tunnel name: vps-ztna-tunnel
-   ```
-   Click **Save tunnel**
-
-4. **Install connector:**
-   - Copy the token shown (starts with `eyJh...`)
-   - **Save this token** - you'll need it in Part 2 for VPS setup
-   - Example: `eyJhIjoiODQ5YTNlZjA0NDVlNmFhNjFlOTcyMmQ5MTgxZDY5ZDQi...`
-   - Click **Next** to continue
-
-5. **Configure public hostname routes:**
-   
-   **⚠️ IMPORTANT - DNS Record Conflicts:**
-   Before adding routes, check if DNS records already exist for these hostnames:
-   1. Go to your Cloudflare dashboard → Select your domain → **DNS** → **Records**
-   2. Look for existing A, AAAA, or CNAME records for: `ssh`, `vnc-hossein`, `vnc-asal`, `vnc-hassan`
-   3. **Delete any existing records** for these hostnames before creating tunnel routes
-   4. Cloudflare Tunnel will automatically create CNAME records pointing to your tunnel
-   
-   In the tunnel configuration, select **Public Hostname** tab and add routes:
-
-   **SSH Access:**
-   - Click **Add a public hostname**
-   - Subdomain: `ssh`
-   - Domain: Select `yourdomain.com` from dropdown
-   - Path: Leave empty
-   - Service Type: `SSH`
-   - URL: `localhost:22`
-   - Click **Save hostname**
-
-   **VNC Applications** (repeat for each user):
-   
-   User 1:
-   - Click **Add a public hostname**
-   - Subdomain: `vnc-hossein`
-   - Domain: Select `yourdomain.com` from dropdown
-   - Path: Leave empty
-   - Service Type: `HTTP`
-   - URL: `localhost:1370`
-   - Click **Save hostname**
-
-   User 2:
-   - Click **Add a public hostname**
-   - Subdomain: `vnc-asal`
-   - Domain: Select `yourdomain.com` from dropdown
-   - Path: Leave empty
-   - Service Type: `HTTP`
-   - URL: `localhost:1377`
-   - Click **Save hostname**
-
-   User 3:
-   - Click **Add a public hostname**
-   - Subdomain: `vnc-hassan`
-   - Domain: Select `yourdomain.com` from dropdown
-   - Path: Leave empty
-   - Service Type: `HTTP`
-   - URL: `localhost:1380`
-   - Click **Save hostname**
-
-6. Click **Save tunnel** (bottom of page)
-
-**Note:** Tunnel will show **Down** status until you set up the VPS server in Part 2.
+**Result:** Only authenticated Gmail users with healthy devices can use WARP Connector.
 
 ---
 
-### 1.6 Create Access Applications for SSH/VNC
+### 1.5 Create Cloudflare Tunnel (SSH/VNC)
 
-**Navigation:** Cloudflare One Dashboard → **Access controls** → **Applications** → **Add an application**
+This creates secure access to your VPS services without exposing ports.
 
-#### Application 1: SSH Access
+#### Step 1: Create Tunnel
 
-1. Select **Self-hosted**
-2. **Application name**: SSH Server
-3. **Application domain**: `ssh.yourdomain.com`
-4. Click **Next**
+1. Go to: **Networks → Tunnels**
+2. Click: **Create a tunnel**
+3. Select connector: **Cloudflared**
+4. **Tunnel name**: `vps-services`
+5. Click **Save tunnel**
 
-**Create Policy:**
-| Configuration | Value |
-|---------------|-------|
-| **Policy name** | Allow Authenticated Users |
-| **Action** | Allow |
+#### Step 2: Install Cloudflared on VPS
 
-**Include rule:**
-| Selector | Operator | Value |
-|----------|----------|-------|
-| Emails ending in | is | @yourcompany.com |
+Copy the installation command shown in the dashboard. It looks like:
 
-**Require rules:**
-| Selector | Operator | Value |
-|----------|----------|-------|
-| **AND** Authentication method | is | mfa - multiple-factor authentication |
-| **AND** Passed Device Posture Checks | in | [Select all posture checks] |
+```bash
+curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared.deb
+sudo cloudflared service install <YOUR_TOKEN>
+```
 
-Click **Next** and **Add application**
+Run this on your VPS.
 
-#### Application 2-4: VNC Access (repeat for each)
+#### Step 3: Configure Routes
 
-**For vnc-hossein.yourdomain.com:**
-1. Select **Self-hosted**
-2. **Application name**: VNC - Hossein
-3. **Application domain**: `vnc-hossein.yourdomain.com`
-4. Use same policy as SSH (Allow Authenticated Users)
-5. Click **Add application**
+**IMPORTANT**: If you see DNS record conflict errors, delete the existing A/AAAA records for your subdomain first:
 
-Repeat for:
-- `vnc-asal.yourdomain.com`
-- `vnc-hassan.yourdomain.com`
+1. Go to Cloudflare Dashboard → DNS → Records
+2. Find and delete any A/AAAA records for `ssh`, `vnc-workstation`, etc.
+3. Then return to tunnel configuration
+
+Now add routes in the Tunnel dashboard:
+
+**SSH Access:**
+- **Subdomain**: `ssh`
+- **Domain**: `yourdomain.com`
+- **Service**: `ssh://localhost:22`
+- Click **Save**
+
+**VNC Access (Workstation):**
+- **Subdomain**: `vnc-workstation`
+- **Domain**: `yourdomain.com`
+- **Service**: `http://localhost:1370`
+- Click **Save**
+
+**VNC Access (Design):**
+- **Subdomain**: `vnc-design`
+- **Domain**: `yourdomain.com`
+- **Service**: `http://localhost:1377`
+- Click **Save**
+
+**VNC Access (TV):**
+- **Subdomain**: `vnc-tv`
+- **Domain**: `yourdomain.com`
+- **Service**: `http://localhost:1380`
+- Click **Save**
+
+**Result:** Services accessible via:
+- `ssh.yourdomain.com`
+- `vnc-workstation.yourdomain.com`
+- `vnc-design.yourdomain.com`
+- `vnc-tv.yourdomain.com`
+
+---
+
+### 1.6 Create Access Applications
+
+Protect tunnel services with Zero Trust authentication.
+
+#### Create SSH Access Application
+
+1. Go to: **Access → Applications**
+2. Click: **Add an application**
+3. Select: **Self-hosted**
+4. Configure:
+   - **Application name**: `VPS SSH`
+   - **Session duration**: `24 hours`
+   - **Application domain**:
+     - **Subdomain**: `ssh`
+     - **Domain**: `yourdomain.com`
+   - Click **Next**
+
+5. Add policy:
+   - **Policy name**: `Gmail Users`
+   - **Action**: `Allow`
+   - **Selector**: `Emails ending in`
+   - **Value**: `gmail.com`
+   - Click **Next**
+
+6. Review and click **Add application**
+
+#### Create VNC Access Applications
+
+Repeat the above steps for each VNC service:
+
+**Workstation VNC:**
+- **Name**: `VNC Workstation`
+- **Subdomain**: `vnc-workstation`
+
+**Design VNC:**
+- **Name**: `VNC Design`
+- **Subdomain**: `vnc-design`
+
+**TV VNC:**
+- **Name**: `VNC TV`
+- **Subdomain**: `vnc-tv`
+
+**Result:** All services require Gmail authentication before access.
 
 ---
 
 ## Part 2: VPS Server Setup
 
-### Step 2.1: Prepare Configuration File
+### 2.1 Install WARP Connector
 
-1. **Clone this repository:**
-   ```bash
-   git clone https://github.com/HosseinBeheshti/setupWS.git
-   cd setupWS
-   ```
-
-2. **Edit `workstation.env`:**
-   ```bash
-   nano workstation.env
-   ```
-
-3. **Update these values:**
-   ```bash
-   # Cloudflare Configuration
-   CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiODQ5YTNlZjA0NDVl..."  # From Step 1.5
-   CLOUDFLARE_DOMAIN="yourdomain.com"
-   CLOUDFLARE_ZONE_ID="your-zone-id"  # From Cloudflare dashboard
-
-   # WireGuard Configuration
-   WG_SERVER_PUBLIC_IP="65.109.210.232"  # Your VPS IPv4 address (NOT IPv6!)
-   WG_PORT="443"  # Obfuscated port (443/UDP appears as HTTPS/QUIC)
-   WG_SUBNET="10.13.13.0/24"
-   WG_DNS="1.1.1.1,1.0.0.1"
-
-   # VNC Users
-   VNCUSER1_USERNAME='hossein'
-   VNCUSER1_PASSWORD='strong_password_here'
-   VNCUSER1_PORT='1370'
-
-   VNCUSER2_USERNAME='asal'
-   VNCUSER2_PASSWORD='strong_password_here'
-   VNCUSER2_PORT='1377'
-
-   VNCUSER3_USERNAME='hassan'
-   VNCUSER3_PASSWORD='strong_password_here'
-   VNCUSER3_PORT='1380'
-
-   VNC_USER_COUNT=3
-   ```
-
-4. Save and exit (Ctrl+X, Y, Enter)
-
-### Step 2.2: Run Setup Script
+SSH into your VPS and run the automated setup script:
 
 ```bash
-sudo ./setup_server.sh
+# Clone the repository
+git clone https://github.com/HosseinBeheshti/setupWS.git
+cd setupWS
+
+# Run WARP Connector setup
+sudo ./setup_warp_connector.sh
 ```
 
-**The script will:**
-1. Install Docker, cloudflared, and system packages
-2. Initialize SQLite database for user management
-3. Generate WireGuard server keys
-4. Enable IP forwarding
-5. Configure firewall rules
-6. Start Docker containers (WireGuard + Cloudflared)
-7. Set up VNC servers for each user
-8. Configure virtual router
-9. Set up automated backups
+This script will:
+- Install Cloudflare WARP Connector
+- Configure IP forwarding and routing
+- Setup UFW firewall
+- Create post-installation guide
 
-**Expected output:**
-```
-[INFO] Loading configuration from workstation.env...
-[INFO] Configuration loaded successfully.
-========================================
-Step 0/5: Setting up ZTNA Infrastructure
-========================================
-[INFO] Installing required packages...
-[INFO] ✓ System packages installed
-[INFO] Installing Docker...
-[INFO] ✓ Docker installed and started
-[INFO] ✓ Docker is operational
-[INFO] Installing cloudflared...
-[INFO] ✓ cloudflared installed
-[INFO] ✓ Directories created
-[INFO] ✓ Database initialized: /var/lib/ztna/users.db
-[INFO] ✓ WireGuard server keys generated
-[INFO] ✓ IP forwarding enabled
-[INFO] ✓ Firewall configured
-[INFO] Starting ZTNA Docker services...
-[INFO] ✓ Docker services started
-[INFO] ✓ WireGuard container running
-[INFO] ✓ Cloudflare tunnel container running
-[INFO] ✓ Cloudflare tunnel connected successfully
-[INFO] ✓ ZTNA Infrastructure setup completed
-========================================
-Step 1/5: Setting up VNC Server and Users
-========================================
-[INFO] ✓ VNC setup completed successfully
-========================================
-Setup Complete!
-========================================
-```
+#### Register WARP Connector
 
-### Step 2.3: Verify Services
+After installation, register the connector:
 
 ```bash
-# Check Docker containers
-docker ps
-
-# Should show:
-# - wireguard (healthy)
-# - cloudflared (running)
-
-# Check Cloudflare tunnel status
-docker logs cloudflared
-
-# Should show: "Registered tunnel connection"
-
-# Check WireGuard status
-docker exec wireguard wg show
-
-# Check VNC services
-systemctl status vncserver-hossein@1.service
-systemctl status vncserver-asal@2.service
-systemctl status vncserver-hassan@3.service
+# Register with Cloudflare
+sudo warp-cli registration new
 ```
 
-### Step 2.4: Verify Tunnel in Cloudflare Dashboard
+You'll be prompted to authenticate. Follow the instructions to link this WARP Connector to your Cloudflare Zero Trust account.
 
-1. Go to **Networks** → **Connectors** → **Cloudflare Tunnels**
-2. Your tunnel should show **Healthy** status
-3. Click on tunnel name to see active connections
-
----
-
-## Part 3: Device Enrollment (All Users)
-
-**Important:** ALL users must complete enrollment before accessing any service.
-
-### 3.1 Desktop/Laptop Enrollment
-
-#### Windows/macOS/Linux
-
-1. **Download Cloudflare One Agent:**
-   - Visit: https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/
-   - Select **"Cloudflare WARP for managed deployment"** (enterprise version)
-   - Click **Download** for your operating system
-   - Install the application
-
-2. **Open Cloudflare One Agent:**
-   - Launch the **Cloudflare One Agent** application
-   - Click the Cloudflare logo in system tray (Windows/Linux) or menu bar (macOS)
-
-3. **Enroll in Zero Trust:**
-   - Click Settings (gear icon) → **Preferences** → **Account**
-   - Select **Login with Cloudflare Zero Trust**
-   - Enter your **team name** (from Step 1.2)
-   - Example: `mycompany-ztna`
-
-4. **Authenticate:**
-   - Browser will open
-   - Login with your email
-   - **Complete 2FA** (enter OTP code from authenticator app)
-   - Click **Open Cloudflare One Agent** when prompted
-
-5. **Connect:**
-   - Cloudflare One Agent will automatically connect
-   - Status should show **Connected**
-   - You are now authenticated and enrolled in Zero Trust
-
-6. **Verify Enrollment:**
-   ```bash
-   # Check connection status
-   warp-cli status
-   # Should show: Connected
-   # Registration: mycompany-ztna
-
-   # Check account info
-   warp-cli account
-   # Should show your email
-   ```
-
-#### CLI Enrollment (Alternative method)
+#### Verify Installation
 
 ```bash
-# Register device
-warp-cli registration new <your-team-name>
-
-# Authenticate in browser (2FA required)
-
-# Verify registration
-warp-cli registration show
-
-# Connect
-warp-cli connect
-
 # Check status
-warp-cli status
-```
+sudo warp-cli status
 
----
-
-### 3.2 Mobile Device Enrollment
-
-#### iOS/Android
-
-1. **Download Cloudflare One Agent:**
-   - iOS: https://apps.apple.com/app/cloudflare-one-agent/id6443476492
-   - Android: https://play.google.com/store/apps/details?id=com.cloudflare.cloudflareoneagent
-   - **Important**: Install "Cloudflare One Agent", NOT the old "1.1.1.1" consumer app
-
-2. **Open App:**
-   - Tap **Next** to start
-   - Review privacy policy → **Accept**
-
-3. **Enroll in Zero Trust:**
-   
-   **Method A: Manual Entry**
-   - Tap **Enter your team name**
-   - Enter: `mycompany-ztna`
-   - Tap **Next**
-
-   **Method B: QR Code (easier)**
-   - On admin computer, generate QR code for: 
-     ```
-     cf1app://oneapp.cloudflare.com/team?name=mycompany-ztna
-     ```
-   - Scan QR code with phone camera
-   - Opens Cloudflare One Agent automatically
-
-4. **Authenticate:**
-   - Login with your email
-   - **Complete 2FA** (enter OTP code)
-   - Tap **Allow** when prompted for VPN profile
-
-5. **Install VPN Profile:**
-   - Tap **Install VPN Profile**
-   - Enter device passcode
-   - Tap **Allow**
-
-6. **Connect:**
-   - Toggle switch to **Connected**
-   - Status should show **Protected**
-
----
-
-### 3.3 Verify Device Posture (Admin)
-
-After users enroll, verify their device health:
-
-1. Go to **Team & Resources** → **Devices** in Cloudflare dashboard
-2. Find the user's device
-3. Click **View details** → **Posture checks** tab
-4. Verify all checks show **Pass**:
-   - ✅ WARP Connected
-   - ✅ OS Version
-   - ✅ Firewall Enabled
-   - ✅ Disk Encrypted (if configured)
-
-**If any check fails:**
-- User must fix the issue (update OS, enable firewall, etc.)
-- Posture checks re-run every 5 minutes automatically
-- User cannot access services until all checks pass
-
----
-
-## Part 4: Using Services After Enrollment
-
-### 4.1 WireGuard VPN Access
-
-**Prerequisites:**
-- ✅ Cloudflare One Agent installed and connected
-- ✅ Device posture checks passing
-- ✅ WireGuard client installed (separate app)
-- ✅ WireGuard config file provided by admin
-
-**IMPORTANT**: You need TWO apps running:
-1. **Cloudflare One Agent** (authentication - must be connected)
-2. **WireGuard** (VPN tunnel - user activates when needed)
-
-#### Step 1: Ensure Cloudflare One Agent is Running
-
-**Before using WireGuard, verify:**
-```bash
-# Check Cloudflare One Agent status
-warp-cli status
-# Must show: Status update: Connected
-
-# If not connected
-warp-cli connect
-```
-
-**On mobile:**
-- Open Cloudflare One Agent
-- Verify status shows "Protected" or "Connected"
-
-#### Step 2: Get WireGuard Configuration
-
-**Admin creates user:**
-```bash
-ssh root@your-vps-ip
-cd /root/setupWS
-sudo ./add_wg_peer.sh username
-```
-
-**Admin sends config to user:**
-- Config file: `/var/lib/ztna/clients/<username>.conf`
-- QR code (for mobile): Shown in terminal after creation
-
-#### Step 3: Install WireGuard Client (Separate from Cloudflare!)
-
-**Desktop:**
-- Windows/macOS/Linux: https://www.wireguard.com/install/
-- Install and launch WireGuard
-
-**Mobile:**
-- iOS: https://apps.apple.com/app/wireguard/id1441195209
-- Android: https://play.google.com/store/apps/details?id=com.wireguard.android
-
-#### Step 4: Import WireGuard Configuration
-
-**Desktop:**
-1. Open WireGuard app
-2. Click **Import tunnel(s) from file**
-3. Select the `.conf` file
-4. Click **Activate**
-
-**Mobile:**
-1. Open WireGuard app
-2. Tap **+** → **Create from QR code**
-3. Scan QR code provided by admin
-4. Tap **Create tunnel**
-5. Toggle to **Active**
-
-#### Step 5: Connect with Both Apps
-
-**Connection Sequence:**
-
-1. **First**: Ensure Cloudflare One Agent is connected
-   ```bash
-   warp-cli status  # Must show: Connected
-   ```
-
-2. **Then**: Activate WireGuard tunnel
-   - Open WireGuard app
-   - Click/tap the toggle to "Activate"
-
-3. **What happens:**
-   - Cloudflare Gateway checks: Is this user authenticated?
-   - If YES → Allows WireGuard connection to configured port (default 443/UDP)
-   - If NO → Blocks connection
-   - WireGuard establishes VPN tunnel
-   - All your internet traffic now routes through VPS
-
-#### Step 6: Test Connection
-
-```bash
-# Test WireGuard gateway
-ping 10.13.13.1
-# Should respond
-
-# Check your public IP (should be VPS IP now)
-curl ifconfig.me
-# Should show: 65.109.210.232 (your VPS IP)
-
-# Test internet via VPN
-curl https://www.google.com
-# Should work
-```
-
-**If connection fails:**
-
-1. **Check Cloudflare One Agent:**
-   ```bash
-   warp-cli status
-   # Must show: Connected
-   ```
-
-2. **Check device posture in dashboard:**
-   - Go to Cloudflare One Dashboard
-   - **Team & Resources** → **Devices**
-   - Find your device
-   - Verify all posture checks show "Pass"
-
-3. **Check Gateway logs:**
-   - **Analytics** → **Gateway** → **Network logs**
-   - Filter: Destination Port = 443 (or your configured WG_PORT)
-   - Look for "Block" actions and reason
-
-4. **Check WireGuard status:**
-   ```bash
-   # On VPS
-   docker logs wireguard
-   docker exec wireguard wg show
-   ```
-
-**Common issues:**
-
-| Problem | Cause | Solution |
-|---------|-------|----------|
-| WireGuard says "Connecting..." forever | Cloudflare One Agent not connected | Run `warp-cli connect` |
-| Connection blocked | Device posture check failed | Fix device issue (OS update, firewall, etc.) |
-| "No route to host" | Split tunnel misconfigured | Check Cloudflare split tunnel settings |
-| Works sometimes, fails others | Cloudflare One Agent disconnected | Ensure it's set to "Always on" |
-
----
-
-### 4.2 SSH Access
-
-**Prerequisites:**
-- ✅ Browser with internet access (WARP not required for browser-based SSH)
-- ✅ Authentication credentials (email + 2FA)
-
-#### Method 1: Browser-Based SSH (Easiest)
-
-1. Open browser and go to: `https://ssh.yourdomain.com`
-2. **Authenticate:**
-   - Enter your email
-   - Complete 2FA
-   - (Optional) Complete device posture check
-3. Browser-based terminal will open
-4. Login as root or your user
-
-#### Method 2: CLI SSH via cloudflared (Advanced)
-
-**One-time setup:**
-```bash
-# Install cloudflared on your local machine
-# macOS
-brew install cloudflare/cloudflare/cloudflared
-
-# Windows
-winget install Cloudflare.cloudflared
-
-# Linux
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
-sudo chmod +x /usr/local/bin/cloudflared
-```
-
-**Connect via SSH:**
-```bash
-# Connect to SSH
-cloudflared access ssh --hostname ssh.yourdomain.com
-
-# Or add to SSH config
-cloudflared access ssh-config --hostname ssh.yourdomain.com >> ~/.ssh/config
-
-# Then use normal SSH
-ssh ssh.yourdomain.com
-```
-
----
-
-### 4.3 VNC Access
-
-**Prerequisites:**
-- ✅ Browser with internet access
-- ✅ Authentication credentials (email + 2FA)
-
-#### Access VNC via Browser
-
-1. Open browser and navigate to your assigned VNC URL:
-   - Hossein: `https://vnc-hossein.yourdomain.com`
-   - Asal: `https://vnc-asal.yourdomain.com`
-   - Hassan: `https://vnc-hassan.yourdomain.com`
-
-2. **Authenticate:**
-   - Enter your email
-   - Complete 2FA verification
-   - Device posture check (automatic)
-
-3. **VNC Login:**
-   - noVNC web interface will load
-   - Click **Connect**
-   - Enter VNC password (provided by admin)
-
-4. **Use Desktop:**
-   - Full Ubuntu desktop environment
-   - Firefox, VS Code, Chrome pre-installed
-   - Internet routed through VPS
-
-**Keyboard shortcuts in noVNC:**
-- **Ctrl+Alt+Shift** - Open extra keys menu
-- **View Only Mode** - Toggle in settings
-- **Clipboard** - Use clipboard button to paste
-
----
-
-## Part 5: Admin Workflows
-
-### 5.1 Add New WireGuard User
-
-```bash
-# SSH to VPS
-ssh root@your-vps-ip
-
-# Navigate to scripts directory
-cd /root/setupWS
-
-# Add new user
-sudo ./add_wg_peer.sh username
-
-# Output:
-# - Config file: /var/lib/ztna/clients/username.conf
-# - QR code displayed in terminal
-# - Database record created
-```
-
-### 5.2 List All Users
-
-```bash
-cd /root/setupWS
-sudo ./query_users.sh
-
-# Shows:
-# - Username
-# - Device ID
-# - IP address
-# - Public key
-# - Created date
-# - Last seen
-```
-
-### 5.3 Remove User
-
-```bash
-# Method 1: Using query_users.sh menu
-sudo ./query_users.sh
-# Select option to delete user
-
-# Method 2: Direct deletion
-docker exec wireguard wg set wg0 peer <PUBLIC_KEY> remove
-
-# Remove from database
-sqlite3 /var/lib/ztna/users.db "DELETE FROM users WHERE username='username';"
-```
-
-### 5.4 Monitor Services
-
-```bash
-# Check Docker containers
-docker ps
+# Check account
+sudo warp-cli account
 
 # View logs
-docker logs wireguard
-docker logs cloudflared
-
-# Check WireGuard connections
-docker exec wireguard wg show
-
-# Check VNC services
-systemctl status vncserver-*
-
-# View Gateway logs (Cloudflare Dashboard)
-# Navigate to: Analytics → Gateway → Network logs
+sudo journalctl -u warp-svc -f
 ```
 
-### 5.5 Revoke Device Access
-
-**In Cloudflare Dashboard:**
-1. Go to **Team & Resources** → **Devices**
-2. Find the device
-3. Click **...** → **Revoke**
-4. Device will be disconnected immediately
-5. User must re-enroll to regain access
+You should see: `Status: Connected`
 
 ---
 
-## Part 6: Backup & Recovery
+### 2.2 Configure Split Tunnels
 
-### 6.1 Automated Backups
+This prevents routing loops and ensures traffic flows correctly.
 
-Backups run automatically daily at 2:00 AM UTC via cron job.
+1. Go to: **Settings → WARP Client → Device settings → Manage → Default**
+2. Scroll to: **Split Tunnels**
+3. Click: **Manage**
+4. Set mode: **Exclude IPs and domains**
+5. Add these exclusions:
+   ```
+   65.109.210.232/32    (your VPS IP - prevents routing loop)
+   10.0.0.0/8           (private networks)
+   172.16.0.0/12        (private networks)
+   192.168.0.0/16       (private networks)
+   ```
+6. Click **Save**
 
-**Backup includes:**
-- WireGuard configurations
-- SQLite user database
-- VNC user configurations
-- System scripts
-
-**Backup location:** `/var/lib/ztna/backups/`
-
-### 6.2 Manual Backup
-
-```bash
-cd /root/setupWS
-sudo ./backup_ztna.sh
-
-# Creates timestamped backup:
-# /var/lib/ztna/backups/ztna_backup_20260122_140530.tar.gz
-```
-
-### 6.3 Download Backup to Local Machine
-
-```bash
-# From your local machine
-scp root@your-vps-ip:/var/lib/ztna/backups/ztna_backup_*.tar.gz ~/backups/
-```
-
-### 6.4 Restore from Backup
-
-```bash
-# On VPS
-cd /var/lib/ztna/backups
-
-# Extract backup
-tar -xzf ztna_backup_20260122_140530.tar.gz
-
-# Restore WireGuard configs
-cp -r etc/wireguard/* /etc/wireguard/
-
-# Restore database
-cp var/lib/ztna/users.db /var/lib/ztna/
-
-# Restart services
-docker compose -f /root/setupWS/docker-compose-ztna.yml restart
-```
+**Why this is needed:**
+- Prevents WARP Connector from routing its own traffic through itself (loop)
+- Excludes private network ranges
+- Ensures proper connectivity
 
 ---
 
-## Part 7: Monitoring & Troubleshooting
+### 2.3 (Optional) L2TP VPN for Infrastructure
 
-### 7.1 Common Issues
+If you need L2TP VPN access for your own infrastructure management (virtual routers, xRDP, etc.), you can set it up alongside WARP Connector.
 
-#### Issue: WireGuard import error "Cannot parse endpoint" (IPv6)
+**Use Cases:**
+- Personal administrative access to VPS
+- Virtual router setup
+- xRDP/Windows Remote Desktop access
+- Network bridging for internal infrastructure
 
-**Symptoms:**
-- Mobile WireGuard app shows: "Unable to import tunnel: Cannot parse endpoint '2a01:4f9:...:51820'"
-- Config QR code won't scan properly
+**Setup:**
 
-**Cause:**
-- Your VPS has IPv6 enabled and `workstation.env` is using IPv6 address
-- WireGuard mobile apps have issues with some IPv6 address formats
+```bash
+# Run L2TP VPN setup
+sudo ./setup_l2tp.sh
+```
+
+This creates a separate L2TP/IPsec VPN server that runs alongside WARP Connector. See [Appendix: L2TP VPN Setup](#appendix-l2tp-vpn-setup) for detailed configuration.
+
+**Note:** This is for infrastructure management only. End users should use Cloudflare One Agent (WARP Connector) for internet routing.
+
+---
+
+## Part 3: Client Device Setup
+
+### 3.1 Install Cloudflare One Agent
+
+Users install the **Cloudflare One Agent** (also called "Cloudflare WARP" or "1.1.1.1 app").
+
+#### Download Links
+
+**Android:**
+- App Store: Search "Cloudflare One Agent"
+- Package name: `com.cloudflare.cloudflareoneagent`
+- Direct link: [Google Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.cloudflareoneagent)
+
+**iOS:**
+- App Store: Search "Cloudflare One Agent"
+- App ID: `id6443476492`
+- Direct link: [Apple App Store](https://apps.apple.com/app/id6443476492)
+
+**Windows/macOS/Linux:**
+- Download from: [https://1.1.1.1/](https://1.1.1.1/)
+- Or direct download: [https://install.appcenter.ms/orgs/cloudflare/apps/1.1.1.1-windows-1/distribution_groups/release](https://install.appcenter.ms/orgs/cloudflare/apps/1.1.1.1-windows-1/distribution_groups/release)
+
+---
+
+### 3.2 Authenticate and Connect
+
+After installing Cloudflare One Agent:
+
+#### Step 1: Open App Settings
+- **Mobile**: Tap hamburger menu (☰) → Settings
+- **Desktop**: Click system tray icon → Settings
+
+#### Step 2: Switch to Zero Trust Mode
+1. Go to: **Account**
+2. Click: **Login with Cloudflare Zero Trust**
+3. Enter your team name: `noise-ztna`
+4. Click **Next**
+
+#### Step 3: Authenticate with Gmail
+1. Select: **One-time PIN**
+2. Enter your Gmail address
+3. Check Gmail inbox for 6-digit PIN
+4. Enter PIN to authenticate
+
+#### Step 4: Device Posture Check
+The app will automatically check:
+- ✅ OS version
+- ✅ Firewall enabled
+- ✅ Disk encryption
+
+If any checks fail, you'll see an error. Fix the issues and try again.
+
+#### Step 5: Connect
+1. Toggle the connection **ON**
+2. Accept VPN connection prompt (mobile only)
+3. Wait for connection to establish
+
+You should see: **Connected** status.
+
+---
+
+## Part 4: Verification
+
+### Verify VPS Exit IP
+
+From the client device (with Cloudflare One Agent connected):
+
+```bash
+# Check public IP
+curl ifconfig.me
+```
+
+**Expected output:** `65.109.210.232` (your VPS IP)
+
+If you see a different IP, check:
+- WARP Connector status on VPS: `sudo warp-cli status`
+- Split Tunnels configuration
+- Gateway Network Policy allows your user email
+
+---
+
+### Verify Device Enrollment
+
+Admin can verify enrolled devices:
+
+1. Go to: **My Team → Devices**
+2. You should see enrolled devices with:
+   - Device name
+   - User email (Gmail)
+   - OS version
+   - Enrollment time
+   - Posture status (✅ or ❌)
+
+---
+
+### Verify SSH/VNC Access
+
+Open browser and visit:
+- `https://ssh.yourdomain.com`
+- `https://vnc-workstation.yourdomain.com`
+
+You should be prompted to authenticate with Gmail. After authentication, you'll access the service.
+
+---
+
+## Troubleshooting
+
+### Client Cannot Connect to WARP
+
+**Symptoms:** Connection fails, stuck on "Connecting..."
+
+**Solutions:**
+1. Check WARP Connector status on VPS:
+   ```bash
+   sudo warp-cli status
+   ```
+   Should show: `Status: Connected`
+
+2. Restart WARP Connector:
+   ```bash
+   sudo systemctl restart warp-svc
+   sudo warp-cli connect
+   ```
+
+3. Check Split Tunnels configuration:
+   - Verify VPS IP is excluded
+   - Verify private networks are excluded
+
+4. Check Gateway Network Policy:
+   - Verify user email matches policy selector
+   - Verify device posture checks pass
+
+---
+
+### Traffic Not Routing Through VPS
+
+**Symptoms:** `curl ifconfig.me` shows ISP IP instead of VPS IP
+
+**Solutions:**
+1. Check WARP Connector is connected:
+   ```bash
+   sudo warp-cli status
+   ```
+
+2. Verify Gateway Network Policy allows your user:
+   - Go to: **Traffic policies → Firewall policies → Network**
+   - Check policy matches your email
+
+3. Check WARP Connector logs:
+   ```bash
+   sudo journalctl -u warp-svc -f
+   ```
+   Look for errors related to routing or authentication
+
+4. Verify Split Tunnels doesn't exclude too much:
+   - Should only exclude VPS IP and private networks
+   - Should NOT exclude public internet ranges
+
+---
+
+### Device Posture Check Fails
+
+**Symptoms:** Cannot connect, see posture check error
+
+**Solutions:**
+
+**OS Version:**
+- Update your operating system to meet minimum requirements
+- macOS: 13.0+, Windows: 10 20H1+, Android: 10+, iOS: 15+
+
+**Firewall:**
+- **Windows**: Settings → Privacy & Security → Windows Security → Firewall & network protection → Turn ON
+- **macOS**: System Preferences → Security & Privacy → Firewall → Turn ON
+- **Linux**: `sudo ufw enable`
+
+**Disk Encryption:**
+- **Windows**: Enable BitLocker
+- **macOS**: Enable FileVault
+- **Linux**: Enable LUKS during installation
+
+---
+
+### WARP Connector Registration Fails
+
+**Symptoms:** `warp-cli registration new` fails or shows error
+
+**Solutions:**
+1. Delete existing registration:
+   ```bash
+   sudo warp-cli registration delete
+   ```
+
+2. Try registering again:
+   ```bash
+   sudo warp-cli registration new
+   ```
+
+3. Check firewall allows WARP:
+   ```bash
+   sudo ufw status
+   ```
+
+4. Check internet connectivity:
+   ```bash
+   ping 1.1.1.1
+   ```
+
+---
+
+### SSH/VNC Access Denied
+
+**Symptoms:** Cannot access `ssh.yourdomain.com`, authentication fails
+
+**Solutions:**
+1. Verify Cloudflare Tunnel is running:
+   ```bash
+   sudo systemctl status cloudflared
+   ```
+
+2. Verify Access Application policy allows your email:
+   - Go to: **Access → Applications**
+   - Check policy selector matches your Gmail domain
+
+3. Check tunnel routes are configured:
+   - Go to: **Networks → Tunnels → vps-services**
+   - Verify routes exist for each service
+
+4. Check service is running on VPS:
+   ```bash
+   # SSH
+   sudo systemctl status ssh
+   
+   # VNC (if using x11vnc)
+   ps aux | grep vnc
+   ```
+
+---
+
+### DNS Record Conflict Error
+
+**Symptoms:** Cannot create tunnel route, see "DNS record already exists" error
 
 **Solution:**
-```bash
-# On your VPS, get your IPv4 address
-curl -4 ifconfig.me
-
-# Edit workstation.env
-nano workstation.env
-
-# Find this line:
-WG_SERVER_PUBLIC_IP=""
-
-# Change to your IPv4 address (example):
-WG_SERVER_PUBLIC_IP="65.109.210.232"
-
-# Regenerate WireGuard configs for all users
-cd /root/setupWS
-sudo ./add_wg_peer.sh username
-
-# Generate new QR code with IPv4
-cat /var/lib/ztna/clients/username/username.conf
-qrencode -t ansiutf8 < /var/lib/ztna/clients/username/username.conf
-```
-
-**Prevention:**
-- Always use IPv4 addresses in `WG_SERVER_PUBLIC_IP`
-- Don't leave it empty if your server has both IPv4 and IPv6
-- Mobile apps work better with IPv4 endpoints
+1. Go to: **Cloudflare Dashboard → DNS → Records**
+2. Find the conflicting A/AAAA record for your subdomain (e.g., `ssh`, `vnc-workstation`)
+3. Delete the record
+4. Return to tunnel configuration and create route again
 
 ---
 
-#### Issue: WARP won't connect
+## Advanced Configuration
 
-**Symptoms:**
-- WARP shows "Disconnected" or "Connecting..."
-- Cannot access any services
-
-**Solutions:**
-```bash
-# Check WARP status
-warp-cli status
-
-# View detailed logs
-warp-cli debug log
-
-# Re-register device
-warp-cli registration delete
-warp-cli registration new <team-name>
-
-# Restart WARP service
-# macOS/Linux
-sudo warp-cli disconnect
-sudo warp-cli connect
-
-# Windows
-net stop WarpSvc
-net start WarpSvc
-```
-
-#### Issue: Device posture checks failing
-
-**Symptoms:**
-- Cannot access services even with WARP connected
-- Cloudflare dashboard shows failed posture checks
-
-**Solutions:**
-1. Check which posture check failed:
-   - Go to **Devices** → Select device → **Posture checks** tab
-   
-2. Fix the specific issue:
-   - **OS Version**: Update operating system
-   - **Firewall**: Enable Windows Defender Firewall or macOS firewall
-   - **Disk Encryption**: Enable BitLocker (Windows) or FileVault (macOS)
-
-3. Wait 5 minutes for automatic re-check
-
-4. Manually trigger re-check:
-   ```bash
-   # Disconnect and reconnect WARP
-   warp-cli disconnect
-   warp-cli connect
-   ```
-
-#### Issue: WireGuard blocked even with WARP connected
-
-**Symptoms:**
-- WARP shows connected
-- WireGuard connection fails or times out
-
-**Solutions:**
-1. Verify WARP is truly connected:
-   ```bash
-   warp-cli status
-   # Must show: Status update: Connected
-   ```
-
-2. Check Gateway logs:
-   - Go to **Analytics** → **Gateway** → **Network logs**
-   - Filter: Destination Port = 443 (or your configured WG_PORT)
-   - Look for block reason
-
-3. Verify Split Tunnel configuration:
-   - Ensure VPS IP is not excluded
-   - Check **Traffic policies** → **Traffic settings** → **Split Tunnels**
-
-4. Check policy order:
-   - **Traffic policies** → **Network**
-   - Ensure Allow policy is ABOVE Block policy
-
-5. Verify user email in policy:
-   - Check that regex matches your email
-   - Example: `.*@yourcompany.com` should match `user@yourcompany.com`
-
-#### Issue: Cannot access SSH/VNC via browser
-
-**Symptoms:**
-- Browser shows "Access Denied" or 403 error
-- Authentication page doesn't appear
-
-**Solutions:**
-1. Verify Access application exists:
-   - **Access controls** → **Applications**
-   - Check SSH/VNC app is listed
-
-2. Check Access policy:
-   - Open application → **Policies** tab
-   - Verify user email is in Include rule
-   - Verify 2FA requirement is correct
-
-3. Verify tunnel is running:
-   - **Networks** → **Connectors** → **Cloudflare Tunnels**
-   - Status should be **Healthy**
-   - Check `docker logs cloudflared` on VPS
-
-4. Clear browser cache and cookies
-
-5. Try incognito/private mode
-
-#### Issue: Cloudflare tunnel shows "Down"
-
-**Symptoms:**
-- Tunnel status: Down
-- SSH/VNC URLs don't work
-
-**Solutions:**
-```bash
-# SSH to VPS
-ssh root@your-vps-ip
-
-# Check cloudflared container
-docker ps
-docker logs cloudflared
-
-# If container not running, restart
-cd /root/setupWS
-source workstation.env
-export CLOUDFLARE_TUNNEL_TOKEN WG_SERVER_PUBLIC_IP WG_PORT WG_SUBNET WG_DNS
-docker compose -f docker-compose-ztna.yml up -d cloudflared
-
-# Verify tunnel registration
-docker logs cloudflared | grep "Registered tunnel connection"
-# Should show 4 connections
-```
-
-### 7.2 Monitoring Dashboard
-
-**Cloudflare Dashboard Analytics:**
-
-1. **Gateway Network Logs:**
-   - **Analytics** → **Gateway** → **Network logs**
-   - Filter by Destination IP (your VPS)
-   - View all WireGuard connection attempts
-   - See which users/devices were allowed or blocked
-
-2. **Access Logs:**
-   - **Analytics** → **Access** → **Logs**
-   - View SSH/VNC authentication attempts
-   - See 2FA completions
-   - Track posture check results
-
-3. **Device Health:**
-   - **Team & Resources** → **Devices**
-   - View all enrolled devices
-   - Check posture status
-   - See last seen timestamp
-
-4. **Tunnel Health:**
-   - **Networks** → **Connectors** → **Cloudflare Tunnels**
-   - View connection status
-   - See active connections count
-   - Check bandwidth usage
-
-### 7.3 VPS Monitoring
+### View WARP Connector Logs
 
 ```bash
-# System resources
-htop
+# Real-time logs
+sudo journalctl -u warp-svc -f
 
-# Docker containers
-docker stats
+# Last 100 lines
+sudo journalctl -u warp-svc -n 100
 
-# WireGuard active peers
-docker exec wireguard wg show
-
-# Check WireGuard bandwidth
-docker exec wireguard wg show wg0 transfer
-
-# View VNC service logs
-journalctl -u vncserver-hossein@1.service -f
-
-# Network connections (adjust port if WG_PORT changed)
-netstat -tuln | grep -E '(443|1370|1377|1380)'
-
-# Disk usage
-df -h
-du -sh /var/lib/ztna/backups
+# Enable debug logging
+sudo warp-cli debug-log on
 ```
 
-### 7.4 Performance Optimization
+---
 
-**For high-traffic WireGuard:**
+### Check Connected Devices
+
+As admin:
+1. Go to: **My Team → Devices**
+2. View:
+   - Device name
+   - User email
+   - OS version
+   - Last seen
+   - Posture status
+
+---
+
+### Useful Commands
+
+**WARP Connector (VPS):**
 ```bash
-# Increase kernel UDP buffer sizes
-sudo sysctl -w net.core.rmem_max=2500000
-sudo sysctl -w net.core.wmem_max=2500000
-
-# Make persistent
-echo "net.core.rmem_max=2500000" | sudo tee -a /etc/sysctl.conf
-echo "net.core.wmem_max=2500000" | sudo tee -a /etc/sysctl.conf
+sudo warp-cli status              # Connection status
+sudo warp-cli connect             # Connect
+sudo warp-cli disconnect          # Disconnect
+sudo warp-cli account             # Account info
+sudo warp-cli settings            # Current settings
+sudo systemctl restart warp-svc   # Restart service
 ```
 
-**For VNC performance:**
-- Use lower resolution (1280x720 instead of 1920x1080)
-- Reduce color depth in VNC client settings
-- Use compression in VNC client
+**Cloudflare Tunnel (VPS):**
+```bash
+sudo systemctl status cloudflared    # Tunnel status
+sudo systemctl restart cloudflared   # Restart tunnel
+sudo journalctl -u cloudflared -f    # View logs
+```
 
-### 7.5 Security Audit
+---
 
-**Regular security checks:**
+## Architecture Benefits
 
-1. **Review enrolled devices:**
-   - **Devices** → Check for unknown devices
-   - Revoke any suspicious devices
+### Compared to Traditional VPN
 
-2. **Review Gateway logs:**
-   - **Analytics** → **Gateway** → **Network logs**
-   - Look for unusual connection patterns
-   - Check for blocked attempts
+| Feature | Traditional VPN | WARP Connector + Zero Trust |
+|---------|----------------|----------------------------|
+| **Authentication** | Pre-shared key | Gmail + One-time PIN |
+| **Device Checks** | None | OS, Firewall, Encryption |
+| **Mobile Support** | ✅ | ✅ |
+| **VPN Conflicts** | ❌ (one VPN only) | ✅ (single app) |
+| **Exit IP** | VPS | VPS |
+| **Obfuscation** | Basic | HTTPS to Cloudflare |
+| **Management** | Manual config files | Centralized dashboard |
 
-3. **Review Access logs:**
-   - **Analytics** → **Access** → **Logs**
-   - Check for failed 2FA attempts
-   - Verify all access is from expected users
+### Security Advantages
 
-4. **Update posture checks:**
-   - Increase minimum OS version requirements
-   - Add new security checks (antivirus, etc.)
+1. **Identity-based Access**: Users authenticate with Gmail, not shared keys
+2. **Device Posture**: Automatically enforces security requirements
+3. **No Config Files**: No risk of leaked VPN configs
+4. **Centralized Control**: Admin can revoke access instantly
+5. **Audit Logs**: See who connected, when, and from where
 
-5. **Rotate credentials:**
-   - Change VNC passwords regularly
-   - Rotate WireGuard keys
-   - Update Cloudflare tunnel token
+---
+
+## What's Next?
+
+### Add More Users
+1. Share the team name: `noise-ztna`
+2. Users install Cloudflare One Agent
+3. Users authenticate with their Gmail
+4. Automatically enrolled if email domain matches
+
+### Monitor Activity
+- **Devices**: My Team → Devices
+- **Logs**: Logs → Gateway → Activity
+- **Analytics**: Analytics → Gateway
+
+### Advanced Policies
+- **Time-based access**: Allow connections only during business hours
+- **Location-based**: Restrict by country/region
+- **Application filtering**: Block specific apps/protocols
 
 ---
 
 ## Summary
 
-You now have a complete Zero Trust architecture where:
+**What you've built:**
+1. ✅ Cloudflare Zero Trust with Gmail authentication (One-time PIN)
+2. ✅ Device posture checks (OS, Firewall, Encryption)
+3. ✅ WARP Connector on VPS routing all traffic
+4. ✅ Users connect with Cloudflare One Agent (single app, all platforms)
+5. ✅ Exit IP shows VPS location (Germany)
+6. ✅ SSH/VNC access via Cloudflare Tunnel (browser-based, secure)
+7. ✅ (Optional) L2TP VPN for infrastructure management
 
-✅ **All users** (WireGuard, SSH, VNC) must:
-- Enroll via Cloudflare WARP
-- Authenticate with 2FA
-- Pass device posture checks
-
-✅ **WireGuard VPN** is protected by:
-- Gateway Network Policies
-- User authentication
-- Device health verification
-
-✅ **SSH/VNC access** is protected by:
-- Cloudflare Access
-- 2FA requirement
-- Posture checks
-
-✅ **Centralized management**:
-- Revoke access instantly from dashboard
-- Monitor all connections in real-time
-- View device health status
-
-✅ **Defense in depth**:
-- Identity verification (who)
-- Device verification (what)
-- Network policies (where)
-- Application policies (how)
-
-**Key Takeaway:** No service can be accessed without authenticating through Cloudflare Zero Trust first. This provides comprehensive security for your entire infrastructure.
+**Result:**
+- Users authenticate with Gmail
+- Devices checked for security compliance
+- All traffic routes through your VPS
+- Works on Desktop + Mobile (no VPN conflicts)
+- Centralized management and monitoring
 
 ---
 
-## Additional Resources
+## Appendix: L2TP VPN Setup
 
-- **Cloudflare One Documentation:** https://developers.cloudflare.com/cloudflare-one/
-- **WireGuard Documentation:** https://www.wireguard.com/
-- **Cloudflare One Agent Download:** https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/
-- **Support:** https://community.cloudflare.com/
+This section covers setting up L2TP/IPsec VPN for **infrastructure management** (your own access to VPS, virtual routers, xRDP, etc.). This is separate from the WARP Connector that end users use.
+
+### Why L2TP Alongside WARP?
+
+- **WARP Connector**: For end users, routes their internet traffic through VPS
+- **L2TP VPN**: For you (admin), direct VPN access to VPS infrastructure
+
+### Installation
+
+```bash
+# Run setup script
+sudo ./setup_l2tp.sh
+```
+
+The script will:
+- Install xl2tpd and strongSwan (IPsec)
+- Configure PSK (Pre-Shared Key) and user credentials
+- Setup UFW firewall rules
+- Configure NAT for VPN clients
+
+### Configuration
+
+Edit `workstation.env` before running:
+
+```bash
+# L2TP Configuration
+L2TP_PSK="your-strong-psk-key"
+L2TP_USERNAME="admin"
+L2TP_PASSWORD="your-strong-password"
+```
+
+### Client Setup
+
+#### Windows
+1. Settings → Network & Internet → VPN → Add VPN
+2. VPN Provider: Windows (built-in)
+3. Connection name: VPS L2TP
+4. Server: 65.109.210.232
+5. VPN type: L2TP/IPsec with pre-shared key
+6. Pre-shared key: (your L2TP_PSK)
+7. Username/Password: (your credentials)
+
+#### macOS
+1. System Preferences → Network → + (Add)
+2. Interface: VPN
+3. VPN Type: L2TP over IPsec
+4. Server: 65.109.210.232
+5. Authentication Settings:
+   - User Authentication: Password
+   - Machine Authentication: Shared Secret
+   - Shared Secret: (your L2TP_PSK)
+
+#### Linux
+```bash
+# Install client
+sudo apt-get install network-manager-l2tp network-manager-l2tp-gnome
+
+# Use NetworkManager GUI to add L2TP connection
+# Or use the run_vpn.sh script
+sudo ./run_vpn.sh
+```
+
+### Use Cases
+
+**Virtual Router Access:**
+```bash
+# After connecting L2TP
+./setup_virtual_router.sh
+```
+
+**xRDP/Windows Remote Desktop:**
+- Connect via L2TP first
+- Access internal RDP services
+
+**Internal Network Management:**
+- Bridge networks
+- Access private services not exposed via Cloudflare Tunnel
+
+### Troubleshooting L2TP
+
+**Connection fails:**
+```bash
+# Check L2TP service
+sudo systemctl status xl2tpd
+
+# Check IPsec
+sudo ipsec status
+
+# View logs
+sudo journalctl -u xl2tpd -f
+```
+
+**Firewall issues:**
+```bash
+# Verify UFW rules
+sudo ufw status
+
+# L2TP requires:
+# - 500/udp (IKE)
+# - 4500/udp (IPsec NAT-T)
+# - 1701/udp (L2TP)
+```
+
+### Running Both WARP and L2TP
+
+WARP Connector and L2TP VPN can coexist on the same VPS:
+
+| Service | Purpose | Users | Port |
+|---------|---------|-------|------|
+| **WARP Connector** | Route end-user traffic | All authenticated users | N/A (Cloudflare network) |
+| **L2TP VPN** | Infrastructure access | Admin only | 500, 4500, 1701/udp |
+
+They don't conflict because:
+- WARP uses Cloudflare's network (no local port needed)
+- L2TP uses UDP ports 500, 4500, 1701
+- Different routing tables
+- Different use cases
 
 ---
 
-**Questions or Issues?** Open an issue on GitHub: https://github.com/HosseinBeheshti/setupWS/issues
+**Result:**
+- Users authenticate with Gmail
+- Devices checked for security compliance
+- All traffic routes through your VPS
+- Works on Desktop + Mobile (no VPN conflicts)
+- Centralized management and monitoring
+
+---
+
+## Support
+
+For issues or questions:
+- **Cloudflare Docs**: [https://developers.cloudflare.com/cloudflare-one/](https://developers.cloudflare.com/cloudflare-one/)
+- **WARP Connector Docs**: [https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/](https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/)
+- **Community**: [https://community.cloudflare.com/](https://community.cloudflare.com/)
+
+---
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file for details.
