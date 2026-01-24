@@ -42,14 +42,16 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 ## Two-Tier Access Control
 
 ### Admin Users 🔐
-**Policy: VNC Access**
-- **What they get**: Remote desktop access via VNC
-- **How**: Cloudflare Tunnel → VNC ports on VPS
+**Policy: SSH & VNC Access**
+- **What they get**: SSH terminal access + Remote desktop access via VNC
+- **How**: Cloudflare Tunnel → SSH port 22 & VNC ports on VPS
 - **Authentication**: Gmail with One-time PIN
 - **Device checks**: OS version, firewall, disk encryption
-- **Access method**: Browser-based VNC viewer
+- **Access method**: 
+  - SSH: `cloudflared access ssh ssh.yourdomain.com`
+  - VNC: Browser-based VNC viewer
 
-**Use case**: System administrators need GUI access to VPS
+**Use case**: System administrators need full access to VPS
 
 ### Regular Users 🌐
 **Policy: Web Traffic Routing**
@@ -241,7 +243,13 @@ sudo cloudflared service install <YOUR_TUNNEL_TOKEN>
 
 #### Step 3: Configure Routes
 
-Add VNC routes in tunnel dashboard:
+Add SSH and VNC routes in tunnel dashboard:
+
+**SSH Access:**
+- **Subdomain**: `ssh`
+- **Domain**: `yourdomain.com`
+- **Service**: `ssh://localhost:22`
+- Click **Save**
 
 **VNC Workstation:**
 - **Subdomain**: `vnc-workstation`
@@ -262,7 +270,29 @@ Add VNC routes in tunnel dashboard:
 
 ### 1.6 Create Access Applications
 
-Protect VNC services with admin-only access.
+Protect SSH and VNC services with admin-only access.
+
+#### SSH Access Application
+
+1. Go to: **Access → Applications**
+2. Click: **Add an application**
+3. Select: **Self-hosted**
+4. Configure:
+   - **Application name**: `VPS SSH`
+   - **Application domain**: `ssh.yourdomain.com`
+   - Click **Next**
+
+5. Add policy:
+   - **Policy name**: `Admins Only`
+   - **Action**: `Allow`
+   - **Selector**: `User Email`
+   - **Operator**: `is`
+   - **Value**: Add all admin emails
+   - Click **Next**
+
+6. Click **Add application**
+
+#### VNC Access Applications
 
 1. Go to: **Access → Applications**
 2. Click: **Add an application**
@@ -284,7 +314,7 @@ Protect VNC services with admin-only access.
    - `VNC Design` → `vnc-design.yourdomain.com`
    - `VNC TV` → `vnc-tv.yourdomain.com`
 
-**Result:** Only admin emails can access VNC services.
+**Result:** Only admin emails can access SSH and VNC services.
 
 ---
 
@@ -396,6 +426,30 @@ Toggle connection **ON**.
 
 ### For Admin Users
 
+**Access SSH:**
+
+First, install cloudflared on your local machine:
+
+```bash
+# macOS (Homebrew)
+brew install cloudflared
+
+# Linux
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Windows (download from GitHub releases)
+# https://github.com/cloudflare/cloudflared/releases
+```
+
+Then connect via SSH:
+
+```bash
+cloudflared access ssh ssh.yourdomain.com
+```
+
+You'll be prompted to authenticate in browser (Gmail + PIN), then SSH session opens.
+
 **Access VNC:**
 Open browser and visit:
 - `https://vnc-workstation.yourdomain.com`
@@ -478,6 +532,31 @@ sudo journalctl -u warp-svc -f
 
 ---
 
+### Admin Cannot Access SSH
+
+**Check Cloudflared on Local Machine:**
+```bash
+# Verify cloudflared is installed
+cloudflared --version
+
+# Test SSH access with verbose logging
+cloudflared access ssh --verbose ssh.yourdomain.com
+```
+
+**Check Tunnel Route:**
+1. Go to: **Networks → Tunnels → vps-admin-services**
+2. Verify SSH route exists: `ssh://localhost:22`
+3. Check tunnel is running on VPS:
+   ```bash
+   sudo systemctl status cloudflared
+   ```
+
+**Check Access Application:**
+1. Go to: **Access → Applications → VPS SSH**
+2. Verify admin email is in policy
+
+---
+
 ### Device Posture Check Fails
 
 **OS Version:**
@@ -499,8 +578,8 @@ Update your OS to meet minimum requirements.
 
 | User Type | Authentication | Access | Traffic Routing |
 |-----------|---------------|--------|-----------------|
-| **Admin** | Gmail + PIN | VNC services via browser | Optional (can enable) |
-| **Regular User** | Gmail + PIN | No VNC access | All traffic via VPS |
+| **Admin** | Gmail + PIN | SSH + VNC services | Optional (can enable) |
+| **Regular User** | Gmail + PIN | No SSH/VNC access | All traffic via VPS |
 
 ---
 
@@ -546,7 +625,7 @@ See the [L2TP appendix in old README](README.md#appendix-l2tp-vpn-setup) for con
 ## What You've Built
 
 ✅ **Two-tier access control**:
-- Admins: VNC access via browser
+- Admins: SSH + VNC access via Cloudflare Tunnel
 - Users: Web traffic through VPS
 
 ✅ **Cloudflare One Agent**: Single app for all users
