@@ -141,12 +141,9 @@ Create a list of admin emails (example):
 ### 1.1 Configure Identity Provider
 
 1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
-2. Navigate to: **Settings → Authentication**
-3. Under **Login methods**, click **Add new**
+2. Navigate to: **Integrations → Identity providers**
+3. Click **Add an identity provider**
 4. Select: **One-time PIN**
-5. Configure:
-   - **Name**: `Gmail One-time PIN`
-   - Click **Save**
 
 ---
 
