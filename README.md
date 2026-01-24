@@ -5,37 +5,36 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Cloudflare Zero Trust                        │
-│                                                                 │
-│  Admin Users                          Regular Users            │
+┌───────────────────────────────────────────────────────────────┐
+│                    Cloudflare Zero Trust                      │
+│                                                               │
+│  Admin Users                          Regular Users           │
 │  ┌──────────────┐                    ┌──────────────┐         │
 │  │ Cloudflare   │                    │ Cloudflare   │         │
 │  │  One Agent   │                    │  One Agent   │         │
 │  └──────┬───────┘                    └──────┬───────┘         │
-│         │                                    │                 │
-│         │ Authenticated                      │ Authenticated   │
-│         ▼                                    ▼                 │
+│         │                                   │                 │
+│         │ Authenticated                     │ Authenticated   │
+│         ▼                                   ▼                 │
 │  ┌──────────────┐                    ┌──────────────┐         │
 │  │   Gateway    │                    │   Gateway    │         │
 │  │   Policy:    │                    │   Policy:    │         │
 │  │   ADMIN      │                    │   USER       │         │
 │  └──────┬───────┘                    └──────┬───────┘         │
-│         │                                    │                 │
-│         │ Access VNC                         │ Route Traffic   │
-│         ▼                                    ▼                 │
+│         │                                   │                 │
+│         │ Access VNC                        │ Route Traffic   │
+│         ▼                                   ▼                 │
 │  ┌──────────────┐                    ┌──────────────┐         │
 │  │  Cloudflare  │                    │     WARP     │         │
 │  │    Tunnel    │                    │  Connector   │         │
 │  └──────┬───────┘                    └──────┬───────┘         │
-└─────────┼──────────────────────────────────┼─────────────────┘
-          │                                    │
-          ▼                                    ▼
-    ┌───────────┐                        ┌───────────┐
-    │    VPS    │                        │    VPS    │
-    │ SSH:22    │                        │  Gateway  │
-    │ VNC:5901  │                        │  Routes   │
-    └───────────┘                        └───────────┘
+└─────────┼───────────────────────────────────┼─────────────────┘
+          ▼                                   ▼
+     ┌───────────┐                        ┌───────────┐
+     │    VPS    │                        │    VPS    │
+     │ SSH:22    │                        │  Gateway  │
+     │ VNC:5901  │                        │  Routes   │
+     └───────────┘                        └───────────┘
 ```
 
 ## Two-Tier Access Control
