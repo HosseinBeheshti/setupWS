@@ -225,8 +225,12 @@ else
 fi
 
 print_message ""
-print_message "IMPORTANT: You need to manually setup Cloudflare Tunnel for VNC access"
+print_message "IMPORTANT: You need to manually setup Cloudflare Tunnel for SSH & VNC access"
 print_message "Follow the instructions at: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/"
+print_message ""
+print_message "Required Tunnel Routes:"
+print_message "  - SSH:  ssh://localhost:22"
+print_message "  - VNC:  http://localhost:5901 (or your configured VNC port)"
 print_message ""
 
 # --- Final Summary ---
@@ -236,7 +240,8 @@ echo -e "${GREEN}All components have been successfully installed and configured!
 echo -e "${YELLOW}Summary:${NC}"
 echo -e "  ✓ WARP Connector for VPN replacement"
 echo -e "  ✓ VNC Server with users"
-echo -e "  ✓ Cloudflare Tunnel for VNC access (manual setup required)"
+echo -e "  ✓ SSH Server (port 22)"
+echo -e "  ✓ Cloudflare Tunnel for SSH & VNC access (manual setup required)"
 if [[ -f "./setup_l2tp.sh" ]] && [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "  ✓ L2TP VPN for infrastructure management"
 fi
@@ -285,18 +290,19 @@ echo -e "   - Go to: Settings → WARP Client → Device settings → Split Tunn
 echo -e "   - Exclude VPS IP: $IP_ADDRESS/32"
 echo -e "   - See README.md for details"
 echo ""
-echo -e "3. ${BLUE}Setup Cloudflare Tunnel for VNC (Admin Access):${NC}"
+echo -e "3. ${BLUE}Setup Cloudflare Tunnel for SSH & VNC (Admin Access):${NC}"
 echo -e "   - Go to: Networks → Tunnels → Create tunnel"
-echo -e "   - Add routes for VNC ports"
+echo -e "   - Add SSH route: ssh://localhost:22"
+echo -e "   - Add VNC route: http://localhost:5901 (or your configured port)"
 echo -e "   - See README.md for complete setup"
 echo ""
 echo -e "4. ${BLUE}Configure Access Policies:${NC}"
-echo -e "   - ${GREEN}Admin Policy:${NC} Access to VNC via Cloudflare Tunnel"
+echo -e "   - ${GREEN}Admin Policy:${NC} Access to SSH & VNC via Cloudflare Tunnel"
 echo -e "   - ${GREEN}User Policy:${NC}  Route web traffic through WARP Connector"
 echo -e "   - See README.md for policy configuration"
 echo ""
 echo -e "5. ${BLUE}Client Setup:${NC}"
-echo -e "   - ${GREEN}Admins:${NC} Install Cloudflare One Agent, authenticate, access VNC"
+echo -e "   - ${GREEN}Admins:${NC} Install Cloudflare One Agent, authenticate, access SSH & VNC"
 echo -e "   - ${GREEN}Users:${NC}  Install Cloudflare One Agent, authenticate, browse web"
 echo -e "   - Traffic exits through VPS IP: $IP_ADDRESS"
 echo ""

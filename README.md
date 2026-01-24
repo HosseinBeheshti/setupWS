@@ -33,9 +33,8 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
           ▼                                    ▼
     ┌───────────┐                        ┌───────────┐
     │    VPS    │                        │    VPS    │
-    │ VNC:1370  │                        │  Gateway  │
-    │ VNC:1377  │                        │  Routes   │
-    │ VNC:1380  │                        │  Traffic  │
+    │ SSH:22    │                        │  Gateway  │
+    │ VNC:5901  │                        │  Routes   │
     └───────────┘                        └───────────┘
 ```
 
@@ -251,20 +250,11 @@ Add SSH and VNC routes in tunnel dashboard:
 - **Service**: `ssh://localhost:22`
 - Click **Save**
 
-**VNC Workstation:**
-- **Subdomain**: `vnc-workstation`
+**VNC Admin:**
+- **Subdomain**: `vnc-admin`
 - **Domain**: `yourdomain.com`
-- **Service**: `http://localhost:1370`
-
-**VNC Design:**
-- **Subdomain**: `vnc-design`
-- **Domain**: `yourdomain.com`
-- **Service**: `http://localhost:1377`
-
-**VNC TV:**
-- **Subdomain**: `vnc-tv`
-- **Domain**: `yourdomain.com`
-- **Service**: `http://localhost:1380`
+- **Service**: `http://localhost:5901`
+- Click **Save**
 
 ---
 
@@ -292,17 +282,16 @@ Protect SSH and VNC services with admin-only access.
 
 6. Click **Add application**
 
-#### VNC Access Applications
+#### VNC Access Application
 
-1. Go to: **Access → Applications**
-2. Click: **Add an application**
-3. Select: **Self-hosted**
-4. Configure:
-   - **Application name**: `VNC Workstation`
-   - **Application domain**: `vnc-workstation.yourdomain.com`
+1. Click: **Add an application**
+2. Select: **Self-hosted**
+3. Configure:
+   - **Application name**: `VNC Admin`
+   - **Application domain**: `vnc-admin.yourdomain.com`
    - Click **Next**
 
-5. Add policy:
+4. Add policy:
    - **Policy name**: `Admins Only`
    - **Action**: `Allow`
    - **Selector**: `User Email`
@@ -310,9 +299,7 @@ Protect SSH and VNC services with admin-only access.
    - **Value**: Add all admin emails
    - Click **Next**
 
-6. Repeat for other VNC services:
-   - `VNC Design` → `vnc-design.yourdomain.com`
-   - `VNC TV` → `vnc-tv.yourdomain.com`
+5. Click **Add application**
 
 **Result:** Only admin emails can access SSH and VNC services.
 
@@ -452,9 +439,7 @@ You'll be prompted to authenticate in browser (Gmail + PIN), then SSH session op
 
 **Access VNC:**
 Open browser and visit:
-- `https://vnc-workstation.yourdomain.com`
-- `https://vnc-design.yourdomain.com`
-- `https://vnc-tv.yourdomain.com`
+- `https://vnc-admin.yourdomain.com`
 
 You'll be prompted to authenticate (Gmail + PIN), then access VNC.
 
