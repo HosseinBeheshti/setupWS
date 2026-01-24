@@ -2,6 +2,9 @@
 
 Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 
+> **🚀 What You Get:**  
+> **System-wide VPN Replacement** - ALL your device traffic (web, DNS, SSH, games, apps, every protocol) routes through your VPS using **Gateway with WARP** mode. Your entire system appears to be at your VPS location. This is NOT just a web proxy - it's a complete VPN replacement that works on all platforms without conflicts.
+
 ## Architecture Overview
 
 ```
@@ -40,36 +43,37 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 ## Two-Tier Access Control
 
 ### Admin Users 🔐
-**Policy: SSH & VNC Access + Traffic Routing**
+**Policy: SSH & VNC Access + System-wide Traffic Routing**
 - **What they get**: 
   - SSH terminal access
   - Remote desktop access via VNC
-  - ALL web traffic routed through VPS
+  - **ALL system traffic** (web, DNS, applications) routed through VPS
 - **How**: 
   - SSH/VNC: Cloudflare Tunnel → SSH port 22 & VNC port 5901
-  - Traffic: WARP Connector routes all traffic through VPS
+  - Traffic: Gateway with WARP mode routes **every connection** through VPS
 - **Authentication**: Gmail with One-time PIN
 - **Device checks**: OS version, firewall, disk encryption
 - **Access method**: 
   - SSH: `cloudflared access ssh ssh.yourdomain.com`
   - VNC: Browser-based VNC viewer at `vnc-admin.yourdomain.com`
-  - Web browsing: All traffic exits via VPS IP
+  - System connections: ALL traffic exits via VPS IP
 
-**Use case**: System administrators need full access to VPS + secure internet routing
+**Use case**: System administrators need full access to VPS + complete system-wide traffic routing
 
 ### Regular Users 🌐
-**Policy: Web Traffic Routing Only**
+**Policy: System-wide Traffic Routing Only**
 - **What they get**: 
-  - Internet access through VPS
+  - **ALL system traffic** routed through VPS (web, DNS, applications)
   - NO administrative access
 - **How**: 
-  - WARP Connector routes ALL traffic through VPS
+  - Gateway with WARP mode routes **every connection** through VPS
   - Cannot access SSH or VNC
 - **Authentication**: Gmail with One-time PIN
 - **Device checks**: OS version, firewall, disk encryption
 - **Exit IP**: VPS location (your VPS IP)
+- **Traffic types**: HTTP, HTTPS, DNS, FTP, SSH, all protocols
 
-**Use case**: Users need secure internet access with VPS exit point, without server access
+**Use case**: Users need complete system-wide traffic routing through VPS exit point, without server access
 
 ---
 
@@ -80,9 +84,10 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 ✅ **No VPN Conflicts**: One app, no dual-VPN issues  
 ✅ **Identity-based**: Gmail authentication, no shared keys  
 ✅ **Device Posture**: Automatic security checks  
-✅ **VPS Exit IP**: All user traffic exits through your VPS  
-✅ **Zero config files**: No VPN configs to manage
-✅ **Unified routing**: Both admins and users route traffic through WARP  
+✅ **System-wide Routing**: ALL traffic (not just web) routes through VPS  
+✅ **VPS Exit IP**: All connections exit with your VPS IP  
+✅ **Zero config files**: No VPN configs to manage  
+✅ **Gateway with WARP**: Full tunnel mode for complete traffic control  
 
 ---
 
@@ -92,6 +97,7 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 - [Part 1: Cloudflare Zero Trust Setup](#part-1-cloudflare-zero-trust-setup)
   - [1.1 Configure Identity Provider](#11-configure-identity-provider)
   - [1.2 Enable Device Enrollment](#12-enable-device-enrollment)
+  - [1.2.1 Configure Gateway with WARP Mode](#121-configure-gateway-with-warp-mode-system-wide-routing)
   - [1.3 Create Device Posture Checks](#13-create-device-posture-checks)
   - [1.4 Create Gateway Policies](#14-create-gateway-policies)
   - [1.5 Create Cloudflare Tunnel](#15-create-cloudflare-tunnel)
@@ -159,6 +165,30 @@ Create a list of admin emails (example):
 
 ---
 
+### 1.2.1 Configure Gateway with WARP Mode (System-wide Routing)
+
+**CRITICAL**: This ensures ALL traffic (not just web) routes through your VPS.
+
+1. Go to: **Settings → WARP Client → Device settings**
+2. Click: **Manage** on the **Default** profile
+3. Scroll to: **Service mode**
+4. Verify it's set to: **Gateway with WARP** (this is the default)
+5. Under **Device tunnel protocol**, ensure: **MASQUE** or **WireGuard**
+6. Click **Save profile**
+
+**What this enables:**
+- ✅ DNS filtering through Gateway
+- ✅ Network traffic routing (all protocols)
+- ✅ HTTP/HTTPS traffic inspection
+- ✅ Complete system-wide traffic control
+
+**Other modes (DON'T use these):**
+- ❌ Gateway with DoH: DNS only, no network traffic
+- ❌ Proxy mode: Only traffic sent to localhost proxy
+- ❌ Secure Web Gateway without DNS: Network/HTTP only, no DNS
+
+---
+
 ### 1.3 Create Device Posture Checks
 
 1. Go to: **Reusable components → Posture checks**
@@ -195,16 +225,16 @@ Create a list of admin emails (example):
 
 Create TWO distinct policies: one for admins, one for regular users.
 
-#### Policy 1: Admin Policy (SSH/VNC Access + Traffic Routing)
+#### Policy 1: Admin Policy (SSH/VNC Access + System-wide Traffic Routing)
 
 This policy allows admins to:
 - Access SSH and VNC via Cloudflare Tunnel
-- Route ALL web traffic through WARP Connector
+- Route **ALL system traffic** (DNS, Network, HTTP) through VPS
 
 1. Go to: **Traffic policies → Firewall policies → Network** tab
 2. Click: **Add a policy**
 3. Configure:
-   - **Policy name**: `Admin - Full Access + WARP Routing`
+   - **Policy name**: `Admin - Full Access + System-wide Routing`
    - **Selector**: `User Email`
    - **Operator**: `is`
    - **Value**: `admin1@gmail.com`
@@ -219,17 +249,18 @@ This policy allows admins to:
 **What this enables for admins:**
 - ✅ SSH access via `ssh.yourdomain.com`
 - ✅ VNC access via `vnc-admin.yourdomain.com`
-- ✅ All web traffic routes through WARP Connector (VPS exit IP)
+- ✅ **ALL system traffic** routes through WARP Connector (VPS exit IP)
+- ✅ DNS queries, network connections, HTTP/HTTPS, all protocols
 
-#### Policy 2: User Policy (Traffic Routing Only)
+#### Policy 2: User Policy (System-wide Traffic Routing Only)
 
 This policy allows regular users to:
-- Route ALL web traffic through WARP Connector
+- Route **ALL system traffic** (DNS, Network, HTTP) through VPS
 - NO SSH/VNC access
 
 1. Click: **Add a policy**
 2. Configure:
-   - **Policy name**: `User - WARP Traffic Routing Only`
+   - **Policy name**: `User - System-wide Routing Only`
    - **Selector**: `User Email`
    - **Operator**: `matches regex`
    - **Value**: `.*@gmail\.com` (matches all Gmail users)
@@ -241,13 +272,14 @@ This policy allows regular users to:
 4. Click **Save**
 
 **What this enables for users:**
-- ✅ All web traffic routes through WARP Connector (VPS exit IP)
+- ✅ **ALL system traffic** routes through WARP Connector (VPS exit IP)
+- ✅ DNS queries, network connections, HTTP/HTTPS, all protocols
 - ❌ NO SSH access
 - ❌ NO VNC access
 
 **Result:** 
-- **Admins**: SSH + VNC access + traffic routing through VPS
-- **Users**: Traffic routing through VPS only
+- **Admins**: SSH + VNC access + system-wide traffic routing through VPS
+- **Users**: System-wide traffic routing through VPS only
 
 ---
 
@@ -444,14 +476,32 @@ Toggle connection **ON**.
 
 ### For Admin Users
 
-**Check Exit IP (same as regular users):**
+**Check Exit IP (HTTP traffic):**
 ```bash
 curl ifconfig.me
 ```
 
 **Expected:** `65.109.210.232` (your VPS IP)
 
-All web traffic routes through your VPS, same as regular users!
+**Check DNS Resolution:**
+```bash
+nslookup cloudflare.com
+# DNS server should be Gateway resolver: 172.64.36.1 or 172.64.36.2
+```
+
+**Check All Traffic Routing:**
+```bash
+# Test FTP (if available)
+curl ftp://ftp.example.com
+
+# Test SSH to external server
+ssh user@external-server.com
+# Connection goes through VPS
+
+# Any protocol routes through VPS
+```
+
+All system traffic (DNS, HTTP, SSH, FTP, everything) routes through your VPS!
 
 **Access SSH:**
 
@@ -494,11 +544,21 @@ curl ifconfig.me
 
 **Expected:** `65.109.210.232` (your VPS IP)
 
-All web traffic now routes through your VPS!
+**Check DNS Resolution:**
+```bash
+nslookup cloudflare.com
+# DNS server should be Gateway resolver: 172.64.36.1 or 172.64.36.2
+```
+
+**Verify System-wide Routing:**
+- Open any app on your device
+- All connections (web, games, messaging, etc.) route through VPS
+- Every DNS query goes through Gateway
+- Every network connection exits with VPS IP
 
 **This applies to:**
-- ✅ Regular users: Only web traffic routing
-- ✅ Admin users: Web traffic routing + SSH/VNC access
+- ✅ Regular users: Complete system-wide traffic routing (all protocols)
+- ✅ Admin users: System-wide traffic routing + SSH/VNC access
 
 ---
 
@@ -523,11 +583,17 @@ sudo warp-cli account
 
 ### Architecture Layers
 
+**Layer 0: WARP Service Mode (Gateway with WARP)**
+- Configured in Device Profile settings
+- **Mode**: Gateway with WARP (default)
+- **What it does**: Routes ALL traffic (DNS, Network, HTTP) through Cloudflare Gateway
+- **Result**: Complete system-wide traffic control, not just web browsing
+
 **Layer 1: Gateway Network Policies (Traffic Routing)**
 - Controls who can route traffic through WARP Connector
-- **Admin Policy**: Specific admin emails → Allow traffic routing
-- **User Policy**: All Gmail users → Allow traffic routing
-- **Result**: ALL users route web traffic through VPS
+- **Admin Policy**: Specific admin emails → Allow system-wide traffic routing
+- **User Policy**: All Gmail users → Allow system-wide traffic routing
+- **Result**: ALL users route complete system traffic through VPS
 
 **Layer 2: Access Applications (Service Access)**
 - Controls who can access SSH and VNC via Cloudflare Tunnel
@@ -539,36 +605,38 @@ sudo warp-cli account
 
 **For Admin Users:**
 ```
-Admin Device with Cloudflare One Agent
+Admin Device with Cloudflare One Agent (Gateway with WARP mode)
 │
-├─→ Web Traffic (browsing, apps)
-│   └─→ WARP Connector → VPS → Internet (Exit IP: VPS)
+├─→ ALL System Traffic (HTTP, DNS, SSH, FTP, games, apps, everything)
+│   └─→ Gateway with WARP → WARP Connector → VPS → Internet (Exit IP: VPS)
 │
-├─→ SSH Access (terminal)
+├─→ SSH Access to VPS (terminal)
 │   └─→ Cloudflare Tunnel → VPS:22 (authenticated via Access App)
 │
-└─→ VNC Access (GUI)
+└─→ VNC Access to VPS (GUI)
     └─→ Cloudflare Tunnel → VPS:5901 (authenticated via Access App)
 ```
 
 **For Regular Users:**
 ```
-User Device with Cloudflare One Agent
+User Device with Cloudflare One Agent (Gateway with WARP mode)
 │
-└─→ Web Traffic (browsing, apps)
-    └─→ WARP Connector → VPS → Internet (Exit IP: VPS)
+└─→ ALL System Traffic (HTTP, DNS, SSH, FTP, games, apps, everything)
+    └─→ Gateway with WARP → WARP Connector → VPS → Internet (Exit IP: VPS)
     
-    ❌ SSH Access: Denied by Access Application
-    ❌ VNC Access: Denied by Access Application
+    ❌ SSH Access to VPS: Denied by Access Application
+    ❌ VNC Access to VPS: Denied by Access Application
 ```
 
 ### Why This Design Works
 
-1. **Single App**: Both admins and users install the same Cloudflare One Agent
-2. **Universal Routing**: Gateway Network Policy ensures ALL users route through WARP
-3. **Selective Access**: Access Applications restrict SSH/VNC to admins only
-4. **Zero Trust**: Every access requires authentication + device posture check
-5. **Platform Agnostic**: Works on Desktop and Mobile without VPN conflicts
+1. **Gateway with WARP Mode**: Device profile set to route ALL traffic (DNS + Network + HTTP)
+2. **Single App**: Both admins and users install the same Cloudflare One Agent
+3. **System-wide Routing**: Gateway Network Policy ensures ALL users route complete system traffic
+4. **Selective Access**: Access Applications restrict SSH/VNC to admins only
+5. **Zero Trust**: Every access requires authentication + device posture check
+6. **Platform Agnostic**: Works on Desktop and Mobile without VPN conflicts
+7. **True VPN Replacement**: Every connection (not just web) goes through VPS
 
 ---
 
@@ -591,16 +659,40 @@ sudo journalctl -u warp-svc -f
 
 ### User Traffic Not Routing Through VPS
 
+**Check Service Mode (Most Common Issue):**
+1. Go to: **Settings → WARP Client → Device settings**
+2. Click: **Manage** on your device profile
+3. Verify **Service mode** is set to: **Gateway with WARP** (NOT Proxy mode or DoH)
+4. This is CRITICAL for system-wide traffic routing
+
 **Check Gateway Policy:**
 1. Go to: **Traffic policies → Firewall policies → Network**
 2. Verify these policies exist:
-   - `Admin - Full Access + WARP Routing`
-   - `User - WARP Traffic Routing Only`
+   - `Admin - Full Access + System-wide Routing`
+   - `User - System-wide Routing Only`
 3. Check user email matches one of the policies
 
 **Check Split Tunnels:**
-1. Verify VPS IP is excluded
+1. Verify VPS IP is excluded: `65.109.210.232/32`
 2. Verify private networks are excluded
+3. Mode should be: **Exclude IPs and domains**
+
+**Verify on Client:**
+```bash
+# Check DNS is using Gateway
+nslookup cloudflare.com
+# Should show Gateway DNS: 172.64.36.1 or 172.64.36.2
+
+# Check exit IP
+curl ifconfig.me
+# Should show VPS IP: 65.109.210.232
+```
+
+**Check WARP Connection Status:**
+On client device:
+- Open Cloudflare One Agent
+- Verify status shows: **Connected**
+- Check Settings → Preferences → Gateway with WARP
 
 ---
 
@@ -660,16 +752,17 @@ Update your OS to meet minimum requirements.
 
 ## Policy Summary
 
-| User Type | Authentication | SSH/VNC Access | Traffic Routing | Exit IP |
-|-----------|---------------|----------------|-----------------|---------|
-| **Admin** | Gmail + PIN | ✅ SSH + VNC via Tunnel | ✅ All traffic via WARP | VPS IP |
-| **Regular User** | Gmail + PIN | ❌ No server access | ✅ All traffic via WARP | VPS IP |
+| User Type | Authentication | SSH/VNC Access | Traffic Routing | DNS | Exit IP |
+|-----------|---------------|----------------|-----------------|-----|---------|
+| **Admin** | Gmail + PIN | ✅ SSH + VNC via Tunnel | ✅ System-wide (all protocols) | ✅ Gateway | VPS IP |
+| **Regular User** | Gmail + PIN | ❌ No server access | ✅ System-wide (all protocols) | ✅ Gateway | VPS IP |
 
 **Key Points:**
-- ✅ **ALL users** (admin + regular) route web traffic through WARP Connector
-- ✅ **ALL users** see VPS IP as their exit IP
-- ✅ **Only admins** can access SSH and VNC
-- ✅ Gateway Network Policy controls both traffic routing AND access permissions
+- ✅ **Gateway with WARP mode** ensures ALL traffic (not just web) routes through VPS
+- ✅ **ALL users** route complete system traffic (DNS + Network + HTTP) through WARP Connector
+- ✅ **ALL users** see VPS IP as their exit IP for every connection
+- ✅ **Only admins** can access SSH and VNC services on VPS
+- ✅ Works for ALL applications and protocols (web, games, SSH, FTP, everything)
 
 ---
 
