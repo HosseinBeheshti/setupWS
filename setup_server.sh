@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Master Setup Script for Secure Remote Desktop Gateway
-# This script orchestrates all setup scripts in the correct order
+# Master Setup Script for Cloudflare Zero Trust Network Access
+# Implements Cloudflare One Agent with WARP Connector for VPN replacement
 # Run with: sudo ./setup_server.sh
 
 # Exit on any error
@@ -37,7 +37,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_vnc.sh" "setup_virtual_router.sh" "setup_l2tp.sh" "setup_ovpn.sh")
+REQUIRED_SCRIPTS=("setup_vnc.sh" "setup_warp_connector.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
@@ -47,11 +47,16 @@ for script in "${REQUIRED_SCRIPTS[@]}"; do
     chmod +x "./$script"
 done
 
-# --- Main Execution ---
-print_header "Starting Secure Remote Desktop Gateway Setup"
+# Optional scripts
+if [[ -f "./setup_l2tp.sh" ]]; then
+    chmod +x "./setup_l2tp.sh"
+fi
 
-# Step 0: Setup ZTNA Infrastructure (Cloudflare, Docker, WireGuard)
-print_header "Step 0/5: Setting up ZTNA Infrastructure"
+# --- Main Execution ---
+print_header "Starting Cloudflare Zero Trust ZTNA Setup"
+
+# Step 0: Setup Base Infrastructure (Cloudflare, Docker)
+print_header "Step 0/4: Setting up Base Infrastructure"
 
 print_message "Installing required packages..."
 apt-get update
@@ -59,14 +64,10 @@ apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
-    qrencode \
-    sqlite3 \
-    uuid-runtime \
     curl \
     wget \
     iptables \
-    net-tools \
-    wireguard-tools
+    net-tools
 
 print_message "✓ System packages installed"
 
@@ -144,48 +145,8 @@ fi
 # Create directory structure
 print_message "Creating directory structure..."
 mkdir -p /etc/cloudflare
-mkdir -p /var/lib/ztna/clients
-mkdir -p /var/lib/ztna/backups
-mkdir -p /etc/wireguard
-chmod 700 /var/lib/ztna
 chmod 700 /etc/cloudflare
-chmod 700 /etc/wireguard
 print_message "✓ Directories created"
-
-# Initialize SQLite database
-print_message "Initializing SQLite database..."
-DB_PATH="${DB_PATH:-/var/lib/ztna/users.db}"
-
-if [[ ! -f "$DB_PATH" ]]; then
-    sqlite3 "$DB_PATH" << 'EOSQL'
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    device_id TEXT NOT NULL,
-    public_key TEXT NOT NULL,
-    peer_ip TEXT UNIQUE NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    last_seen TIMESTAMP
-);
-
-CREATE INDEX idx_username ON users(username);
-CREATE INDEX idx_device_id ON users(device_id);
-CREATE INDEX idx_peer_ip ON users(peer_ip);
-EOSQL
-    print_message "✓ Database initialized: $DB_PATH"
-else
-    print_message "✓ Database already exists: $DB_PATH"
-fi
-
-# Generate WireGuard server keys if not exist
-print_message "Configuring WireGuard server..."
-if [[ ! -f "/etc/wireguard/server_private.key" ]]; then
-    wg genkey | tee /etc/wireguard/server_private.key | wg pubkey > /etc/wireguard/server_public.key
-    chmod 600 /etc/wireguard/server_private.key
-    print_message "✓ WireGuard server keys generated"
-else
-    print_message "✓ WireGuard keys already exist"
-fi
 
 # Enable IP forwarding
 print_message "Enabling IP forwarding..."
@@ -201,61 +162,21 @@ print_message "✓ IP forwarding enabled"
 print_message "Configuring firewall..."
 ufw --force enable
 ufw allow 22/tcp comment 'SSH'
-ufw allow ${WG_PORT:-443}/udp comment 'WireGuard'
-print_message "✓ Firewall configured (WireGuard on port ${WG_PORT:-443}/udp)"
+print_message "✓ Firewall configured"
 
-# Start Docker services
-print_message "Starting ZTNA Docker services..."
-if [[ -f "./docker-compose-ztna.yml" ]]; then
-    # Check if CLOUDFLARE_TUNNEL_TOKEN is set
-    if [[ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]]; then
-        print_warning "CLOUDFLARE_TUNNEL_TOKEN not set in workstation.env"
-        print_warning "Cloudflare tunnel will not start. Set token and run:"
-        print_warning "  docker compose -f docker-compose-ztna.yml up -d cloudflared"
-    fi
-    
-    # Export environment variables for docker compose
-    export CLOUDFLARE_TUNNEL_TOKEN
-    export WG_SERVER_PUBLIC_IP
-    export WG_PORT
-    export WG_SUBNET
-    export WG_DNS
-    
-    # Use 'docker compose' (v2) instead of 'docker-compose' (v1)
-    docker compose -f docker-compose-ztna.yml up -d
-    print_message "✓ Docker services started"
-    
-    # Wait for containers to be ready
-    sleep 5
-    
-    # Check container status
-    if docker ps | grep -q wireguard; then
-        print_message "✓ WireGuard container running"
-    else
-        print_warning "WireGuard container not running, check logs: docker logs wireguard"
-    fi
-    
-    if docker ps | grep -q cloudflared; then
-        print_message "✓ Cloudflare tunnel container running"
-        
-        # Verify tunnel is connected by checking logs
-        sleep 3
-        if docker logs cloudflared 2>&1 | grep -q "Registered tunnel connection"; then
-            print_message "✓ Cloudflare tunnel connected successfully"
-        else
-            print_warning "Cloudflare tunnel may not be connected. Check logs: docker logs cloudflared"
-        fi
-    else
-        print_warning "Cloudflare tunnel not running, check logs: docker logs cloudflared"
-    fi
-else
-    print_warning "docker-compose-ztna.yml not found, skipping Docker deployment"
+print_message "✓ Base Infrastructure setup completed"
+
+# Step 1: Setup WARP Connector
+print_header "Step 1/4: Setting up WARP Connector"
+./setup_warp_connector.sh
+if [[ $? -ne 0 ]]; then
+    print_error "WARP Connector setup failed!"
+    exit 1
 fi
+print_message "✓ WARP Connector setup completed successfully"
 
-print_message "✓ ZTNA Infrastructure setup completed"
-
-# Step 1: Setup VNC Server with Users
-print_header "Step 1/5: Setting up VNC Server and Users"
+# Step 2: Setup VNC Server with Users
+print_header "Step 2/4: Setting up VNC Server and Users"
 ./setup_vnc.sh
 if [[ $? -ne 0 ]]; then
     print_error "VNC setup failed!"
@@ -263,92 +184,70 @@ if [[ $? -ne 0 ]]; then
 fi
 print_message "✓ VNC setup completed successfully"
 
-# Step 2: Setup Virtual Router
-print_header "Step 2/5: Setting up Virtual Router"
-./setup_virtual_router.sh
-if [[ $? -ne 0 ]]; then
-    print_error "Virtual Router setup failed!"
-    exit 1
-fi
-print_message "✓ Virtual Router setup completed successfully"
-
-# Step 3: Setup L2TP VPN (if configured)
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    print_header "Step 3/5: Setting up L2TP VPN"
-    ./setup_l2tp.sh
-    if [[ $? -ne 0 ]]; then
-        print_error "L2TP VPN setup failed!"
-        exit 1
-    fi
-    print_message "✓ L2TP VPN setup completed successfully"
-else
-    print_warning "Step 3/5: L2TP VPN not in VPN_LIST, skipping..."
-fi
-
-# Step 4: Setup OpenVPN (if configured)
-if [[ " $VPN_LIST " =~ " ovpn " ]]; then
-    print_header "Step 4/5: Setting up OpenVPN"
-    ./setup_ovpn.sh
-    if [[ $? -ne 0 ]]; then
-        print_error "OpenVPN setup failed!"
-        exit 1
-    fi
-    print_message "✓ OpenVPN setup completed successfully"
-else
-    print_warning "Step 4/5: OpenVPN not in VPN_LIST, skipping..."
-fi
-
-# Step 5: Setup Backup Automation
-print_header "Step 5/5: Setting up Automated Backups"
-
-if [[ -f "./backup_ztna.sh" ]]; then
-    chmod +x ./backup_ztna.sh
-    
-    # Setup cron job for daily backups at 2 AM
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    CRON_JOB="0 2 * * * $SCRIPT_DIR/backup_ztna.sh >> /var/log/ztna_backup.log 2>&1"
-    
-    if ! crontab -l 2>/dev/null | grep -q "backup_ztna.sh"; then
-        (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-        print_message "✓ Backup cron job installed (runs daily at 2 AM)"
+# Step 3: Setup L2TP VPN for Infrastructure (Optional)
+print_header "Step 3/4: Setting up L2TP VPN for Infrastructure Management"
+if [[ -f "./setup_l2tp.sh" ]]; then
+    read -p "Do you want to setup L2TP VPN for infrastructure access (virtual router, xRDP)? (y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        ./setup_l2tp.sh
+        if [[ $? -ne 0 ]]; then
+            print_warning "L2TP VPN setup failed, but continuing..."
+        else
+            print_message "✓ L2TP VPN setup completed successfully"
+        fi
     else
-        print_message "✓ Backup cron job already exists"
+        print_message "Skipping L2TP VPN setup"
     fi
-    
-    # Run initial backup
-    print_message "Running initial backup..."
-    ./backup_ztna.sh
-    print_message "✓ Initial backup completed"
 else
-    print_warning "backup_ztna.sh not found, skipping backup setup"
+    print_message "setup_l2tp.sh not found, skipping L2TP setup"
 fi
 
-print_message "✓ Backup automation setup completed"
+# Step 4: Configure Cloudflare Tunnel for VNC Access
+print_header "Step 4/4: Configuring Cloudflare Tunnel for VNC Access"
+
+print_message "Installing cloudflared if not present..."
+if [[ ! -f "/usr/local/bin/cloudflared" ]]; then
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "x86_64" ]]; then
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /tmp/cloudflared
+    elif [[ "$ARCH" == "aarch64" ]]; then
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64 -O /tmp/cloudflared
+    else
+        print_error "Unsupported architecture: $ARCH"
+        exit 1
+    fi
+    chmod +x /tmp/cloudflared
+    mv /tmp/cloudflared /usr/local/bin/cloudflared
+    print_message "✓ cloudflared installed"
+else
+    print_message "✓ cloudflared already installed"
+fi
+
+print_message ""
+print_message "IMPORTANT: You need to manually setup Cloudflare Tunnel for VNC access"
+print_message "Follow the instructions at: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/"
+print_message ""
 
 # --- Final Summary ---
 print_header "Setup Complete!"
 echo -e "${GREEN}All components have been successfully installed and configured!${NC}\n"
 
 echo -e "${YELLOW}Summary:${NC}"
-echo -e "  ✓ ZTNA Infrastructure (Cloudflare Tunnel, WireGuard)"
+echo -e "  ✓ WARP Connector for VPN replacement"
 echo -e "  ✓ VNC Server with users"
-echo -e "  ✓ Virtual Router for VPN traffic"
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    echo -e "  ✓ L2TP VPN configured"
+echo -e "  ✓ Cloudflare Tunnel for VNC access (manual setup required)"
+if [[ -f "./setup_l2tp.sh" ]] && [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "  ✓ L2TP VPN for infrastructure management"
 fi
-if [[ " $VPN_LIST " =~ " ovpn " ]]; then
-    echo -e "  ✓ OpenVPN configured"
-fi
-echo -e "  ✓ Automated backups scheduled"
 echo ""
 
-# Display ZTNA information
-echo -e "${YELLOW}ZTNA Services:${NC}"
+# Display WARP Connector information
+echo -e "${YELLOW}WARP Connector Status:${NC}"
 echo -e "-----------------------------------------------------"
-echo -e "  ${GREEN}WireGuard:${NC}         Port ${WG_PORT:-443}/udp"
-echo -e "  ${GREEN}Cloudflare Tunnel:${NC} Dynamic port (access via CF Access)"
-echo -e "  ${GREEN}Database:${NC}          $DB_PATH"
-echo -e "  ${YELLOW}Note:${NC}              Port ${WG_PORT:-443}/UDP appears as HTTPS/QUIC traffic"
+echo -e "  ${GREEN}Run this to check:${NC} sudo warp-cli status"
+echo -e "  ${GREEN}Register:${NC}          sudo warp-cli registration new"
+echo -e "  ${GREEN}Connect:${NC}           sudo warp-cli connect"
 echo ""
 
 # Display VNC user information
@@ -377,37 +276,32 @@ for ((i=1; i<=VNC_USER_COUNT; i++)); do
 done
 
 echo -e "${YELLOW}Next Steps:${NC}"
-echo -e "1. ${BLUE}Admin Access:${NC}"
-echo -e "   - Install WARP client on your device"
-echo -e "   - Enroll with Cloudflare Zero Trust"
-echo -e "   - Access VNC via: https://vnc-<username>.${CLOUDFLARE_DOMAIN:-yourdomain.com}"
-echo -e "   - Access SSH via: cloudflared access ssh --hostname ssh.${CLOUDFLARE_DOMAIN:-yourdomain.com}"
+echo -e "1. ${BLUE}Complete WARP Connector Registration:${NC}"
+echo -e "   ${CYAN}sudo warp-cli registration new${NC}"
+echo -e "   Follow prompts to link to Cloudflare Zero Trust"
 echo ""
-echo -e "2. ${BLUE}User Provisioning:${NC}"
-echo -e "   - Add WireGuard users: ${GREEN}sudo ./add_wg_peer.sh <username>${NC}"
-echo -e "   - Manage users: ${GREEN}sudo ./query_users.sh${NC}"
+echo -e "2. ${BLUE}Configure Split Tunnels in Cloudflare Dashboard:${NC}"
+echo -e "   - Go to: Settings → WARP Client → Device settings → Split Tunnels"
+echo -e "   - Exclude VPS IP: $IP_ADDRESS/32"
+echo -e "   - See README.md for details"
 echo ""
-echo -e "3. ${BLUE}VPN Management (Admins):${NC}"
-echo -e "   - Run VPN: ${GREEN}sudo ./run_vpn.sh${NC}"
-echo -e "   - Check services: systemctl status vncserver-<username>@<display>.service"
+echo -e "3. ${BLUE}Setup Cloudflare Tunnel for VNC (Admin Access):${NC}"
+echo -e "   - Go to: Networks → Tunnels → Create tunnel"
+echo -e "   - Add routes for VNC ports"
+echo -e "   - See README.md for complete setup"
 echo ""
-echo -e "4. ${BLUE}Monitoring:${NC}"
-echo -e "   - Docker status: docker ps"
-echo -e "   - WireGuard peers: sudo wg show"
-echo -e "   - Logs: docker logs wireguard | cloudflared"
+echo -e "4. ${BLUE}Configure Access Policies:${NC}"
+echo -e "   - ${GREEN}Admin Policy:${NC} Access to VNC via Cloudflare Tunnel"
+echo -e "   - ${GREEN}User Policy:${NC}  Route web traffic through WARP Connector"
+echo -e "   - See README.md for policy configuration"
 echo ""
-echo -e "5. ${BLUE}Backups:${NC}"
-echo -e "   - Automated daily at 2 AM to: /var/lib/ztna/backups/"
-echo -e "   - Manual backup: ${GREEN}sudo ./backup_ztna.sh${NC}"
+echo -e "5. ${BLUE}Client Setup:${NC}"
+echo -e "   - ${GREEN}Admins:${NC} Install Cloudflare One Agent, authenticate, access VNC"
+echo -e "   - ${GREEN}Users:${NC}  Install Cloudflare One Agent, authenticate, browse web"
+echo -e "   - Traffic exits through VPS IP: $IP_ADDRESS"
 echo ""
-
-# --- Cleanup: Remove workstation.env from root ---
-if [[ -f "/root/workstation.env" ]]; then
-    print_message "Removing workstation.env from root directory for security..."
-    rm -f /root/workstation.env
-    print_message "✓ Configuration file cleaned up"
-fi
 
 echo -e "${GREEN}Setup completed at $(date)${NC}"
+echo -e "${YELLOW}Read the complete guide in README.md${NC}"
 
 exit 0
