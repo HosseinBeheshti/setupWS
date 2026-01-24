@@ -300,7 +300,7 @@ git clone https://github.com/HosseinBeheshti/setupWS.git
 cd setupWS
 
 # Edit configuration
-nano workstation.env
+vim workstation.env
 
 # Run setup
 sudo ./setup_server.sh
