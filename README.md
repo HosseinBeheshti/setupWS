@@ -41,26 +41,36 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 ## Two-Tier Access Control
 
 ### Admin Users 🔐
-**Policy: SSH & VNC Access**
-- **What they get**: SSH terminal access + Remote desktop access via VNC
-- **How**: Cloudflare Tunnel → SSH port 22 & VNC ports on VPS
+**Policy: SSH & VNC Access + Traffic Routing**
+- **What they get**: 
+  - SSH terminal access
+  - Remote desktop access via VNC
+  - ALL web traffic routed through VPS
+- **How**: 
+  - SSH/VNC: Cloudflare Tunnel → SSH port 22 & VNC port 5901
+  - Traffic: WARP Connector routes all traffic through VPS
 - **Authentication**: Gmail with One-time PIN
 - **Device checks**: OS version, firewall, disk encryption
 - **Access method**: 
   - SSH: `cloudflared access ssh ssh.yourdomain.com`
-  - VNC: Browser-based VNC viewer
+  - VNC: Browser-based VNC viewer at `vnc-admin.yourdomain.com`
+  - Web browsing: All traffic exits via VPS IP
 
-**Use case**: System administrators need full access to VPS
+**Use case**: System administrators need full access to VPS + secure internet routing
 
 ### Regular Users 🌐
-**Policy: Web Traffic Routing**
-- **What they get**: Internet access through VPS
-- **How**: WARP Connector routes all traffic through VPS
+**Policy: Web Traffic Routing Only**
+- **What they get**: 
+  - Internet access through VPS
+  - NO administrative access
+- **How**: 
+  - WARP Connector routes ALL traffic through VPS
+  - Cannot access SSH or VNC
 - **Authentication**: Gmail with One-time PIN
 - **Device checks**: OS version, firewall, disk encryption
 - **Exit IP**: VPS location (your VPS IP)
 
-**Use case**: Users need secure internet access with VPS exit point
+**Use case**: Users need secure internet access with VPS exit point, without server access
 
 ---
 
@@ -72,7 +82,8 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 ✅ **Identity-based**: Gmail authentication, no shared keys  
 ✅ **Device Posture**: Automatic security checks  
 ✅ **VPS Exit IP**: All user traffic exits through your VPS  
-✅ **Zero config files**: No VPN configs to manage  
+✅ **Zero config files**: No VPN configs to manage
+✅ **Unified routing**: Both admins and users route traffic through WARP  
 
 ---
 
@@ -94,6 +105,7 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
   - [3.1 Install Cloudflare One Agent](#31-install-cloudflare-one-agent)
   - [3.2 Authenticate](#32-authenticate)
 - [Part 4: Verification](#part-4-verification)
+- [How It All Works Together](#how-it-all-works-together)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -182,18 +194,22 @@ Create a list of admin emails (example):
 
 ### 1.4 Create Gateway Policies
 
-Create TWO policies for admin vs regular users.
+Create TWO distinct policies: one for admins, one for regular users.
 
-#### Policy 1: Admin VNC Access
+#### Policy 1: Admin Policy (SSH/VNC Access + Traffic Routing)
+
+This policy allows admins to:
+- Access SSH and VNC via Cloudflare Tunnel
+- Route ALL web traffic through WARP Connector
 
 1. Go to: **Traffic policies → Firewall policies → Network** tab
 2. Click: **Add a policy**
 3. Configure:
-   - **Policy name**: `Admin VNC Access`
+   - **Policy name**: `Admin - Full Access + WARP Routing`
    - **Selector**: `User Email`
    - **Operator**: `is`
-   - **Value**: `admin1@gmail.com` (add all admin emails)
-   - Click **Or** to add more emails: `admin2@gmail.com`, etc.
+   - **Value**: `admin1@gmail.com`
+   - Click **Or** to add more admin emails: `admin2@gmail.com`, etc.
    - **Action**: `Allow`
 4. Under **Device posture**, add:
    - ✅ OS Version Check
@@ -201,14 +217,23 @@ Create TWO policies for admin vs regular users.
    - ✅ Disk Encryption
 5. Click **Save**
 
-#### Policy 2: User Web Traffic Routing
+**What this enables for admins:**
+- ✅ SSH access via `ssh.yourdomain.com`
+- ✅ VNC access via `vnc-admin.yourdomain.com`
+- ✅ All web traffic routes through WARP Connector (VPS exit IP)
+
+#### Policy 2: User Policy (Traffic Routing Only)
+
+This policy allows regular users to:
+- Route ALL web traffic through WARP Connector
+- NO SSH/VNC access
 
 1. Click: **Add a policy**
 2. Configure:
-   - **Policy name**: `User Web Traffic`
+   - **Policy name**: `User - WARP Traffic Routing Only`
    - **Selector**: `User Email`
    - **Operator**: `matches regex`
-   - **Value**: `.*` (matches all Gmail users)
+   - **Value**: `.*@gmail\.com` (matches all Gmail users)
    - **Action**: `Allow`
 3. Under **Device posture**, add:
    - ✅ OS Version Check
@@ -216,7 +241,14 @@ Create TWO policies for admin vs regular users.
    - ✅ Disk Encryption
 4. Click **Save**
 
-**Result:** Admins can access VNC, all users can route web traffic.
+**What this enables for users:**
+- ✅ All web traffic routes through WARP Connector (VPS exit IP)
+- ❌ NO SSH access
+- ❌ NO VNC access
+
+**Result:** 
+- **Admins**: SSH + VNC access + traffic routing through VPS
+- **Users**: Traffic routing through VPS only
 
 ---
 
@@ -413,6 +445,15 @@ Toggle connection **ON**.
 
 ### For Admin Users
 
+**Check Exit IP (same as regular users):**
+```bash
+curl ifconfig.me
+```
+
+**Expected:** `65.109.210.232` (your VPS IP)
+
+All web traffic routes through your VPS, same as regular users!
+
 **Access SSH:**
 
 First, install cloudflared on your local machine:
@@ -456,6 +497,10 @@ curl ifconfig.me
 
 All web traffic now routes through your VPS!
 
+**This applies to:**
+- ✅ Regular users: Only web traffic routing
+- ✅ Admin users: Web traffic routing + SSH/VNC access
+
 ---
 
 ### For VPS Admin
@@ -472,6 +517,59 @@ sudo warp-cli account
 **Check enrolled devices:**
 1. Go to: **My Team → Devices**
 2. View all enrolled devices with user emails
+
+---
+
+## How It All Works Together
+
+### Architecture Layers
+
+**Layer 1: Gateway Network Policies (Traffic Routing)**
+- Controls who can route traffic through WARP Connector
+- **Admin Policy**: Specific admin emails → Allow traffic routing
+- **User Policy**: All Gmail users → Allow traffic routing
+- **Result**: ALL users route web traffic through VPS
+
+**Layer 2: Access Applications (Service Access)**
+- Controls who can access SSH and VNC via Cloudflare Tunnel
+- **SSH Application**: Only admin emails → Allow SSH access
+- **VNC Application**: Only admin emails → Allow VNC access
+- **Result**: Only admins can access server services
+
+### Traffic Flow Breakdown
+
+**For Admin Users:**
+```
+Admin Device with Cloudflare One Agent
+│
+├─→ Web Traffic (browsing, apps)
+│   └─→ WARP Connector → VPS → Internet (Exit IP: VPS)
+│
+├─→ SSH Access (terminal)
+│   └─→ Cloudflare Tunnel → VPS:22 (authenticated via Access App)
+│
+└─→ VNC Access (GUI)
+    └─→ Cloudflare Tunnel → VPS:5901 (authenticated via Access App)
+```
+
+**For Regular Users:**
+```
+User Device with Cloudflare One Agent
+│
+└─→ Web Traffic (browsing, apps)
+    └─→ WARP Connector → VPS → Internet (Exit IP: VPS)
+    
+    ❌ SSH Access: Denied by Access Application
+    ❌ VNC Access: Denied by Access Application
+```
+
+### Why This Design Works
+
+1. **Single App**: Both admins and users install the same Cloudflare One Agent
+2. **Universal Routing**: Gateway Network Policy ensures ALL users route through WARP
+3. **Selective Access**: Access Applications restrict SSH/VNC to admins only
+4. **Zero Trust**: Every access requires authentication + device posture check
+5. **Platform Agnostic**: Works on Desktop and Mobile without VPN conflicts
 
 ---
 
@@ -496,8 +594,10 @@ sudo journalctl -u warp-svc -f
 
 **Check Gateway Policy:**
 1. Go to: **Traffic policies → Firewall policies → Network**
-2. Verify `User Web Traffic` policy exists
-3. Check user email matches policy
+2. Verify these policies exist:
+   - `Admin - Full Access + WARP Routing`
+   - `User - WARP Traffic Routing Only`
+3. Check user email matches one of the policies
 
 **Check Split Tunnels:**
 1. Verify VPS IP is excluded
@@ -561,10 +661,16 @@ Update your OS to meet minimum requirements.
 
 ## Policy Summary
 
-| User Type | Authentication | Access | Traffic Routing |
-|-----------|---------------|--------|-----------------|
-| **Admin** | Gmail + PIN | SSH + VNC services | Optional (can enable) |
-| **Regular User** | Gmail + PIN | No SSH/VNC access | All traffic via VPS |
+| User Type | Authentication | SSH/VNC Access | Traffic Routing | Exit IP |
+|-----------|---------------|----------------|-----------------|---------|
+| **Admin** | Gmail + PIN | ✅ SSH + VNC via Tunnel | ✅ All traffic via WARP | VPS IP |
+| **Regular User** | Gmail + PIN | ❌ No server access | ✅ All traffic via WARP | VPS IP |
+
+**Key Points:**
+- ✅ **ALL users** (admin + regular) route web traffic through WARP Connector
+- ✅ **ALL users** see VPS IP as their exit IP
+- ✅ **Only admins** can access SSH and VNC
+- ✅ Gateway Network Policy controls both traffic routing AND access permissions
 
 ---
 
@@ -609,13 +715,15 @@ See the [L2TP appendix in old README](README.md#appendix-l2tp-vpn-setup) for con
 
 ## What You've Built
 
-✅ **Two-tier access control**:
-- Admins: SSH + VNC access via Cloudflare Tunnel
-- Users: Web traffic through VPS
+✅ **Two-tier access control with unified traffic routing**:
+- **Admins**: SSH + VNC access + web traffic through VPS
+- **Users**: Web traffic through VPS only (no server access)
 
 ✅ **Cloudflare One Agent**: Single app for all users
 
-✅ **WARP Connector**: Routes user traffic through VPS
+✅ **WARP Connector**: Routes ALL user traffic through VPS
+
+✅ **Universal VPS Exit IP**: Both admins and users show VPS IP
 
 ✅ **Zero Trust**: Gmail authentication + device posture
 
