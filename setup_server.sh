@@ -215,40 +215,47 @@ print_message "✓ Firewall configured"
 # Step 6: Install and Configure Cloudflare WARP Connector
 print_header "Step 6/6: Installing Cloudflare WARP Connector"
 
+# 1. Setup pubkey, apt repo, and update/install WARP
 print_message "Adding Cloudflare repository..."
-curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+curl https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
 
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list > /dev/null
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list
 
 print_message "Installing Cloudflare WARP..."
-apt-get update -qq && apt-get install -y -qq cloudflare-warp
+apt-get update && apt-get install cloudflare-warp
 
+# 2. Enable IP forwarding on the host
 print_message "Enabling IP forwarding..."
-sysctl -w net.ipv4.ip_forward=1 > /dev/null
-sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+sysctl -w net.ipv4.ip_forward=1
 
 # Make persistent
 if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
     echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-    echo "net.ipv6.conf.all.forwarding = 1" >> /etc/sysctl.conf
 fi
-sysctl -p > /dev/null
 
-print_message "Registering WARP Connector with token..."
-warp-cli registration new --accept-tos > /dev/null 2>&1 || true
-warp-cli registration token "$CLOUDFLARE_WARP_TOKEN" > /dev/null 2>&1
+# 3. Run the WARP Connector with token
+print_warning "⚠️  WARNING: The next command will disconnect your SSH session!"
+print_warning "⚠️  This is expected behavior when WARP Connector activates."
+print_warning "⚠️  Wait 30 seconds, then reconnect via SSH to verify setup."
+echo ""
+read -p "Press Enter to continue with WARP activation (this will drop SSH)..." -t 10 || true
+echo ""
 
-print_message "Connecting WARP..."
-warp-cli connect > /dev/null 2>&1
+print_message "Running WARP Connector with token (SSH will disconnect)..."
+warp-cli connector new "$CLOUDFLARE_WARP_TOKEN"
 
-# Wait for connection
+print_message "Connecting WARP Connector..."
+warp-cli connect
+
+# Check connection status
 sleep 3
-
-# Verify connection
 if warp-cli status | grep -q "Connected"; then
-    print_message "✓ WARP Connector registered and connected"
+    print_message "✓ WARP Connector connected successfully"
 else
-    print_warning "WARP Connector may not be fully connected yet. Check with: sudo warp-cli status"
+    print_error "WARP Connector connection FAILED!"
+    print_error "Check status with: sudo warp-cli status"
+    print_error "Check logs with: journalctl -u warp-svc -n 50"
+    exit 1
 fi
 
 
