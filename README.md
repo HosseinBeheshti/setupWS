@@ -80,25 +80,7 @@ This creates the WARP Connector that routes client traffic through your VPS:
 5. **Tunnel name**: `vps-traffic-routing` (or any name you prefer)
 6. Click **Create tunnel**
 7. Select **Linux** as the operating system
-8. **Copy the installation commands** shown in the dashboard (you'll need these in Part 2)
-
-The commands will look like:
-```bash
-# Install WARP client
-curl https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-sudo apt-get update && sudo apt-get install cloudflare-warp
-
-# Enable IP forwarding
-sudo sysctl -w net.ipv4.ip_forward=1
-sudo sysctl -w net.ipv6.conf.all.forwarding=1
-
-# Register WARP Connector
-sudo warp-cli registration new --accept-tos
-sudo warp-cli registration token <YOUR-TOKEN-HERE>
-sudo warp-cli connect
-```
-
+8. **Save tunnel token in your workstation.env**
 9. Click **Next** after copying the commands
 
 **Result**: WARP Connector tunnel is created and ready for installation on VPS.
@@ -118,6 +100,8 @@ Allow authorized users to enroll/connect their devices:
    - **Selector**: `Emails`
    - **Value**: `user1@gmail.com`
 5. Click **Save**
+
+Note: include this policy in the **Device enrollment permissions**
 
 ---
 
