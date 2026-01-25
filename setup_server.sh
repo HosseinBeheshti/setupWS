@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Master Setup Script for Cloudflare Zero Trust Network Access
-# Implements Cloudflare One Agent with WARP Connector for VPN replacement
+# VPS Setup Script for Cloudflare WARP Connector VPN Replacement
+# Installs required applications WITHOUT configuring Cloudflare services
+# Configuration must be done manually following README.md
 # Run with: sudo ./setup_server.sh
 
 # Exit on any error
@@ -12,6 +13,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # --- Helper Functions ---
@@ -36,117 +38,61 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_vnc.sh" "setup_warp_connector.sh")
-for script in "${REQUIRED_SCRIPTS[@]}"; do
-    if [[ ! -f "./$script" ]]; then
-        print_error "Required script not found: $script"
-        exit 1
-    fi
-    # Make sure scripts are executable
-    chmod +x "./$script"
-done
+# --- Main Execution ---
+print_header "VPS Application Setup - NO Cloudflare Configuration"
+print_warning "This script ONLY installs applications."
+print_warning "You must configure Cloudflare services manually (see README.md)"
+echo ""
 
-# Optional scripts
+# Step 1: Update System
+print_header "Step 1/5: Updating System"
+print_message "Updating package lists..."
+apt-get update
+print_message "Upgrading packages..."
+apt-get upgrade -y
+print_message "✓ System updated"
+
+# Step 2: Install Desktop Environment and VNC
+print_header "Step 2/5: Installing Desktop Environment and VNC"
+
+print_message "Installing Ubuntu Desktop and XFCE4..."
+apt-get install -y ubuntu-desktop xfce4 xfce4-goodies
+
+print_message "Installing VNC Server..."
+apt-get install -y tigervnc-standalone-server tigervnc-common
+
+print_message "✓ Desktop environment and VNC installed"
+print_warning "Configure VNC manually: vncpasswd, create ~/.vnc/xstartup (see README.md section 2.2)"
+
+# Step 3: Install L2TP/IPSec VPN
+print_header "Step 3/5: Installing L2TP/IPSec VPN (Fallback)"
+
 if [[ -f "./setup_l2tp.sh" ]]; then
     chmod +x "./setup_l2tp.sh"
-fi
-
-# --- Main Execution ---
-print_header "Starting Cloudflare Zero Trust ZTNA Setup"
-
-# Step 0: Setup Base Infrastructure (Cloudflare, Docker)
-print_header "Step 0/4: Setting up Base Infrastructure"
-
-print_message "Installing required packages..."
-apt-get update
-apt-get install -y \
-    ca-certificates \
-    gnupg \
-    lsb-release \
-    curl \
-    wget \
-    iptables \
-    net-tools
-
-print_message "✓ System packages installed"
-
-# Install Docker using official method
-print_message "Installing Docker..."
-if ! command -v docker &> /dev/null; then
-    # Remove old Docker installations
-    apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
-    
-    # Setup Docker repository
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-    
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-      tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    # Install Docker Engine
-    apt-get update
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    
-    # Start and enable Docker
-    systemctl start docker
-    systemctl enable docker
-    
-    print_message "✓ Docker installed and started"
-else
-    print_message "✓ Docker already installed"
-    # Ensure Docker is running
-    if ! systemctl is-active --quiet docker; then
-        systemctl start docker
-        print_message "✓ Docker service started"
-    fi
-fi
-
-# Verify Docker is working
-if docker ps &> /dev/null; then
-    print_message "✓ Docker is operational"
-else
-    print_error "Docker installation failed or service not running"
-    print_message "Attempting to fix Docker service..."
-    systemctl daemon-reload
-    systemctl restart docker.socket
-    systemctl restart docker
-    sleep 5
-    if ! docker ps &> /dev/null; then
-        print_error "Docker still not working. Check logs: journalctl -xeu docker"
-        exit 1
-    fi
-fi
-
-print_message "✓ Packages installed"
-
-# Install cloudflared
-print_message "Installing cloudflared..."
-if [[ ! -f "/usr/local/bin/cloudflared" ]]; then
-    ARCH=$(uname -m)
-    if [[ "$ARCH" == "x86_64" ]]; then
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /tmp/cloudflared
-    elif [[ "$ARCH" == "aarch64" ]]; then
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64 -O /tmp/cloudflared
+    print_message "Running L2TP setup script..."
+    ./setup_l2tp.sh
+    if [[ $? -eq 0 ]]; then
+        print_message "✓ L2TP/IPSec VPN installed"
     else
-        print_error "Unsupported architecture: $ARCH"
-        exit 1
+        print_warning "L2TP setup encountered issues, continuing..."
     fi
-    chmod +x /tmp/cloudflared
-    mv /tmp/cloudflared /usr/local/bin/cloudflared
-    print_message "✓ cloudflared installed"
 else
-    print_message "✓ cloudflared already installed"
+    print_warning "setup_l2tp.sh not found, skipping L2TP installation"
 fi
 
-# Create directory structure
-print_message "Creating directory structure..."
-mkdir -p /etc/cloudflare
-chmod 700 /etc/cloudflare
-print_message "✓ Directories created"
+# Step 4: Install Cloudflare WARP Client
+print_header "Step 4/5: Installing Cloudflare WARP Client"
+
+print_message "Adding Cloudflare repository..."
+curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list
+
+print_message "Installing Cloudflare WARP..."
+apt-get update && apt-get install -y cloudflare-warp
+
+print_message "✓ Cloudflare WARP client installed"
+print_warning "DO NOT register WARP yet! Follow README.md section 2.3 for configuration"
 
 # Enable IP forwarding
 print_message "Enabling IP forwarding..."
@@ -191,123 +137,100 @@ if [[ -f "./setup_l2tp.sh" ]]; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         ./setup_l2tp.sh
-        if [[ $? -ne 0 ]]; then
-            print_warning "L2TP VPN setup failed, but continuing..."
-        else
-            print_message "✓ L2TP VPN setup completed successfully"
-        fi
-    else
-        print_message "Skipping L2TP VPN setup"
-    fi
-else
-    print_message "setup_l2tp.sh not found, skipping L2TP setup"
+  Step 5: Configure System and Firewall
+print_header "Step 5/5: Configuring System and Firewall"
+
+# Enable IP forwarding
+print_message "Enabling IP forwarding..."
+sysctl -w net.ipv4.ip_forward=1 > /dev/null
+sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+
+# Make persistent
+if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding = 1" >> /etc/sysctl.conf
 fi
+sysctl -p > /dev/null
 
-# Step 4: Configure Cloudflare Tunnel for VNC Access
-print_header "Step 4/4: Configuring Cloudflare Tunnel for VNC Access"
+print_message "✓ IP forwarding enabled"
 
-print_message "Installing cloudflared if not present..."
-if [[ ! -f "/usr/local/bin/cloudflared" ]]; then
-    ARCH=$(uname -m)
-    if [[ "$ARCH" == "x86_64" ]]; then
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /tmp/cloudflared
-    elif [[ "$ARCH" == "aarch64" ]]; then
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64 -O /tmp/cloudflared
-    else
-        print_error "Unsupported architecture: $ARCH"
-        exit 1
-    fi
-    chmod +x /tmp/cloudflared
-    mv /tmp/cloudflared /usr/local/bin/cloudflared
-    print_message "✓ cloudflared installed"
-else
-    print_message "✓ cloudflared already installed"
-fi
+# Configure UFW firewall
+print_message "Configuring firewall..."
+ufw --force enable
 
-print_message ""
-print_message "IMPORTANT: You need to manually setup Cloudflare Tunnel for SSH & VNC access"
-print_message "Follow the instructions at: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/"
-print_message ""
-print_message "Required Tunnel Routes:"
-print_message "  - SSH:  ssh://localhost:22"
-print_message "  - VNC:  http://localhost:5901 (or your configured VNC port)"
-print_message ""
+# Allow SSH
+ufw allow 22/tcp comment 'SSH'
 
-# --- Final Summary ---
-print_header "Setup Complete!"
-echo -e "${GREEN}All components have been successfully installed and configured!${NC}\n"
-
-echo -e "${YELLOW}Summary:${NC}"
-echo -e "  ✓ WARP Connector for VPN replacement"
-echo -e "  ✓ VNC Server with users"
-echo -e "  ✓ SSH Server (port 22)"
-echo -e "  ✓ Cloudflare Tunnel for SSH & VNC access (manual setup required)"
-if [[ -f "./setup_l2tp.sh" ]] && [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "  ✓ L2TP VPN for infrastructure management"
-fi
-echo ""
-
-# Display WARP Connector information
-echo -e "${YELLOW}WARP Connector Status:${NC}"
-echo -e "-----------------------------------------------------"
-echo -e "  ${GREEN}Run this to check:${NC} sudo warp-cli status"
-echo -e "  ${GREEN}Register:${NC}          sudo warp-cli registration new"
-echo -e "  ${GREEN}Connect:${NC}           sudo warp-cli connect"
-echo ""
-
-# Display VNC user information
-IP_ADDRESS=$(hostname -I | awk '{print $1}')
-echo -e "${YELLOW}VNC Connection Details:${NC}"
-echo -e "-----------------------------------------------------"
-
+# Allow VNC ports from configuration
 for ((i=1; i<=VNC_USER_COUNT; i++)); do
-    username_var="VNCUSER${i}_USERNAME"
-    display_var="VNCUSER${i}_DISPLAY"
-    resolution_var="VNCUSER${i}_RESOLUTION"
     port_var="VNCUSER${i}_PORT"
-    
-    username="${!username_var}"
-    display="${!display_var}"
-    resolution="${!resolution_var}"
+    username_var="VNCUSER${i}_USERNAME"
     port="${!port_var}"
+    username="${!username_var}"
     
-    if [[ -n "$username" ]]; then
-        echo -e "  ${GREEN}User:${NC}       $username"
-        echo -e "  ${GREEN}Password:${NC}   [configured]"
-        echo -e "  ${GREEN}Address:${NC}    $IP_ADDRESS:$port (Display :$display)"
-        echo -e "  ${GREEN}Resolution:${NC} $resolution"
-        echo ""
+    if [[ -n "$port" ]]; then
+        ufw allow ${port}/tcp comment "VNC-${username}"
+        print_message "  ✓ Allowed VNC port ${port} for user ${username}"
     fi
 done
 
-echo -e "${YELLOW}Next Steps:${NC}"
-echo -e "1. ${BLUE}Complete WARP Connector Registration:${NC}"
-echo -e "   ${CYAN}sudo warp-cli registration new${NC}"
-echo -e "   Follow prompts to link to Cloudflare Zero Trust"
-echo ""
-echo -e "2. ${BLUE}Configure Split Tunnels in Cloudflare Dashboard:${NC}"
-echo -e "   - Go to: Settings → WARP Client → Device settings → Split Tunnels"
-echo -e "   - Exclude VPS IP: $IP_ADDRESS/32"
-echo -e "   - See README.md for details"
-echo ""
-echo -e "3. ${BLUE}Setup Cloudflare Tunnel for SSH & VNC (Admin Access):${NC}"
-echo -e "   - Go to: Networks → Tunnels → Create tunnel"
-echo -e "   - Add SSH route: ssh://localhost:22"
-echo -e "   - Add VNC route: http://localhost:5901 (or your configured port)"
-echo -e "   - See README.md for complete setup"
-echo ""
-echo -e "4. ${BLUE}Configure Access Policies:${NC}"
-echo -e "   - ${GREEN}Admin Policy:${NC} Access to SSH & VNC via Cloudflare Tunnel"
-echo -e "   - ${GREEN}User Policy:${NC}  Route web traffic through WARP Connector"
-echo -e "   - See README.md for policy configuration"
-echo ""
-echo -e "5. ${BLUE}Client Setup:${NC}"
-echo -e "   - ${GREEN}Admins:${NC} Install Cloudflare One Agent, authenticate, access SSH & VNC"
-echo -e "   - ${GREEN}Users:${NC}  Install Cloudflare One Agent, authenticate, browse web"
-echo -e "   - Traffic exits through VPS IP: $IP_ADDRESS"
+# Allow L2TP/IPSec
+ufw allow 500/udp comment 'L2TP-IKE'
+ufw allow 4500/udp comment 'L2TP-NAT-T'
+ufw allow 1701/udp comment 'L2TP'
+
+print_message "✓ Firewall configured"
+
+# --- Installation Complete ---
+print_header "Application Installation Complete!"
+
+IP_ADDRESS=$(hostname -I | awk '{print $1}')
+
+echo -e "${GREEN}All applications have been successfully installed!${NC}\n"
+echo -e "${YELLOW}Installed Components:${NC}"
+echo -e "  ✓ Ubuntu Desktop + XFCE4"
+echo -e "  ✓ TigerVNC Server"
+echo -e "  ✓ L2TP/IPSec VPN"
+echo -e "  ✓ Cloudflare WARP Client"
+echo -e "  ✓ System IP forwarding enabled"
+echo -e "  ✓ Firewall rules configured"
 echo ""
 
-echo -e "${GREEN}Setup completed at $(date)${NC}"
-echo -e "${YELLOW}Read the complete guide in README.md${NC}"
-
-exit 0
+echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${RED}  IMPORTANT: CLOUDFLARE CONFIGURATION NOT DONE!${NC}"
+echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "${YELLOW}You must follow README.md to configure Cloudflare services:${NC}"
+echo ""
+echo -e "${CYAN}Part 1: Cloudflare Dashboard Setup${NC}"
+echo -e "  1. Create WARP Connector tunnel (section 1.2)"
+echo -e "  2. Configure device enrollment (section 1.3)"
+echo -e "  3. Configure split tunnels (section 1.4)"
+echo ""
+echo -e "${CYAN}Part 2: VPS Configuration${NC}"
+echo -e "  1. Configure VNC (section 2.2):"
+echo -e "     ${GREEN}vncpasswd${NC}"
+echo -e "     ${GREEN}mkdir -p ~/.vnc && vi ~/.vnc/xstartup${NC}"
+echo -e "     ${GREEN}vncserver :1 -geometry 1920x1080 -depth 24${NC}"
+echo ""
+echo -e "  2. Register WARP Connector (section 2.3):"
+echo -e "     ${GREEN}sudo warp-cli registration new --accept-tos${NC}"
+echo -e "     ${GREEN}sudo warp-cli registration token <YOUR-TOKEN>${NC}"
+echo -e "     ${GREEN}sudo warp-cli connect${NC}"
+echo ""
+echo -e "${CYAN}VPS Information:${NC}"
+echo -e "  IP Address: ${GREEN}$IP_ADDRESS${NC}"
+echo -e "  SSH Port:   ${GREEN}22${NC}"
+echo -e "  VNC Ports:  ${GREEN}"
+for ((i=1; i<=VNC_USER_COUNT; i++)); do
+    port_var="VNCUSER${i}_PORT"
+    username_var="VNCUSER${i}_USERNAME"
+    port="${!port_var}"
+    username="${!username_var}"
+    if [[ -n "$port" ]]; then
+        echo -e "              ${port} (${username})${NC}"
+    fi
+done
+echo ""
+echo -e "${YELLOW}Next: Follow README.md Part 2, section 2.2 onwards${NC}"
+echo "
