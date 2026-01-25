@@ -152,7 +152,7 @@ Protect SSH and VNC with admin-only policies:
 5. Select **Add public hostname**
 6. In **Domain** dropdown, select your domain
 7. In **Subdomain**, enter: `ssh`
-8. Add Admin Access policy:
+8. Select **Access policies → Select existing policies**:
    - **Policy name**: `Admin - SSH/VNC + System-wide Routing`
 10. Select **Next**
 11. (Optional) Configure App Launcher and Block page settings
