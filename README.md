@@ -149,8 +149,8 @@ Create a list of admin emails (example):
 
 ### 1.2 Enable Device Enrollment
 
-1. Go to: **Settings → WARP Client** tab
-2. Scroll to: **Device enrollment**
+1. Go to: **Team & Resources → Devices Settings**
+3. Click: **Device enrollment**
 3. Click: **Manage**
 4. Under **Device enrollment permissions**, click **Add a rule**
 5. Configure:
