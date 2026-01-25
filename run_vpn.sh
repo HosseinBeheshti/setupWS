@@ -30,31 +30,6 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# --- VPN Type Selection ---
-select_vpn_type() {
-    echo ""
-    print_header "Select VPN Type:"
-    echo "  1) L2TP/IPsec"
-    echo "  2) OpenVPN"
-    echo ""
-    read -p "Enter your choice (1-2): " vpn_choice
-    
-    case $vpn_choice in
-        1)
-            VPN_TYPE="l2tp"
-            ;;
-        2)
-            VPN_TYPE="ovpn"
-            ;;
-        *)
-            print_error "Invalid choice"
-            exit 1
-            ;;
-    esac
-    
-    print_message "Selected VPN type: $VPN_TYPE"
-}
-
 # --- Confirm routing all apps through VPN ---
 confirm_routing() {
     echo ""
@@ -64,7 +39,7 @@ confirm_routing() {
         return
     fi
     
-    print_header "Applications that will be routed through $VPN_TYPE:"
+    print_header "Applications that will be routed through L2TP:"
     local i=1
     for app in $VPN_APPS; do
         echo "  $i) $app"
@@ -168,106 +143,6 @@ disconnect_l2tp() {
     print_message "L2TP VPN disconnected."
 }
 
-# --- OpenVPN Connection Functions ---
-connect_ovpn() {
-    OVPN_TABLE="vpn_ovpn"
-    OVPN_FWMARK="201"
-    
-    # Validate OpenVPN Configuration
-    if [[ -z "$OVPN_CONFIG_PATH" ]]; then
-        print_error "OVPN_CONFIG_PATH not defined in $ENV_FILE"
-        exit 1
-    fi
-
-    OVPN_CONFIG_NAME=$(basename "$OVPN_CONFIG_PATH")
-    OVPN_CLIENT_CONFIG="/etc/openvpn/client/${OVPN_CONFIG_NAME}"
-
-    if [[ ! -f "$OVPN_CLIENT_CONFIG" ]]; then
-        print_error "OpenVPN config file not found: $OVPN_CLIENT_CONFIG"
-        print_error "Run setup_ovpn.sh first"
-        exit 1
-    fi
-
-    print_message "Starting OpenVPN connection..."
-    print_message "Config: $OVPN_CLIENT_CONFIG"
-
-    # Start OpenVPN in background
-    openvpn --config "$OVPN_CLIENT_CONFIG" --daemon ovpn-client --writepid /tmp/ovpn-client.pid
-
-    # Get PID
-    sleep 2
-    if [[ -f /tmp/ovpn-client.pid ]]; then
-        OVPN_PID=$(cat /tmp/ovpn-client.pid)
-    else
-        print_error "Failed to start OpenVPN"
-        exit 1
-    fi
-
-    print_message "Waiting for OpenVPN connection..."
-    for i in {1..20}; do
-        if ip addr show | grep -q tun0; then
-            print_message "VPN interface tun0 is UP!"
-            break
-        fi
-        sleep 1
-    done
-
-    if ip addr show | grep -q tun0; then
-        TUN_IP=$(ip addr show tun0 | grep -oP 'inet \K[0-9.]+' | head -n1)
-        print_message "=== OpenVPN Connected Successfully ==="
-        echo ""
-        echo -e "${YELLOW}VPN Type:${NC} OpenVPN"
-        echo -e "${YELLOW}Interface:${NC} tun0"
-        echo -e "${YELLOW}Local IP:${NC} $TUN_IP"
-        echo -e "${YELLOW}Config:${NC} $OVPN_CONFIG_PATH"
-        echo -e "${YELLOW}Routing Table:${NC} $OVPN_TABLE"
-        
-        if [[ -n "$VPN_APPS" ]]; then
-            echo -e "${YELLOW}Routing Apps:${NC} $VPN_APPS"
-        fi
-        
-        echo ""
-        
-        print_message "Testing external connectivity..."
-        if ping -c 2 -W 3 8.8.8.8 >/dev/null 2>&1; then
-            print_message "✓ Internet is reachable through VPN"
-        else
-            print_warning "✗ Internet connectivity test failed"
-        fi
-        
-        echo ""
-        display_status_info
-        
-        # Keep the script running and monitor connection
-        while kill -0 "$OVPN_PID" 2>/dev/null && ip addr show | grep -q tun0; do
-            sleep 5
-        done
-        
-        print_warning "VPN connection lost!"
-    else
-        print_error "VPN connection failed!"
-        print_error "Check config: $OVPN_CLIENT_CONFIG"
-        print_error "Check logs: tail -f /tmp/ovpn-up.log"
-        exit 1
-    fi
-}
-
-disconnect_ovpn() {
-    print_message "Disconnecting OpenVPN..."
-    
-    # Kill OpenVPN process
-    if [[ -n "$OVPN_PID" ]] && kill -0 "$OVPN_PID" 2>/dev/null; then
-        kill "$OVPN_PID" 2>/dev/null || true
-        wait "$OVPN_PID" 2>/dev/null || true
-    fi
-    
-    # Clean up routing rules
-    ip rule del fwmark 201 table vpn_ovpn 2>/dev/null || true
-    ip route flush table vpn_ovpn 2>/dev/null || true
-    ip route flush cache 2>/dev/null || true
-    
-    print_message "OpenVPN disconnected."
-}
 
 # --- Display Status Info ---
 display_status_info() {
@@ -276,15 +151,9 @@ display_status_info() {
     echo ""
     echo -e "${GREEN}Useful Commands (in another terminal):${NC}"
     
-    if [[ "$VPN_TYPE" == "l2tp" ]]; then
-        echo -e "  Check VPN status: ${GREEN}ip addr show ppp0${NC}"
-        echo -e "  Check routing: ${GREEN}ip route show table vpn_l2tp${NC}"
-        echo -e "  Check IPsec: ${GREEN}sudo ipsec statusall${NC}"
-    else
-        echo -e "  Check VPN status: ${GREEN}ip addr show tun0${NC}"
-        echo -e "  Check routing: ${GREEN}ip route show table vpn_ovpn${NC}"
-        echo -e "  View logs: ${GREEN}tail -f /tmp/ovpn-up.log${NC}"
-    fi
+    echo -e "  Check VPN status: ${GREEN}ip addr show ppp0${NC}"
+    echo -e "  Check routing: ${GREEN}ip route show table vpn_l2tp${NC}"
+    echo -e "  Check IPsec: ${GREEN}sudo ipsec statusall${NC}"
     
     if [[ -n "$VPN_APPS" ]]; then
         echo ""
@@ -299,11 +168,7 @@ display_status_info() {
 # --- Cleanup Function ---
 cleanup() {
     echo ""
-    if [[ "$VPN_TYPE" == "l2tp" ]]; then
-        disconnect_l2tp
-    else
-        disconnect_ovpn
-    fi
+    disconnect_l2tp
     exit 0
 }
 
@@ -313,11 +178,8 @@ trap cleanup EXIT INT TERM
 # --- Main Script ---
 echo ""
 echo -e "${CYAN}========================================${NC}"
-echo -e "${CYAN}   Universal VPN Connection Manager${NC}"
+echo -e "${CYAN}   VPN Connection Manager${NC}"
 echo -e "${CYAN}========================================${NC}"
-
-# Select VPN type
-select_vpn_type
 
 # Confirm routing configuration
 confirm_routing
@@ -326,11 +188,6 @@ echo ""
 print_message "Starting VPN connection..."
 echo ""
 
-# Connect based on VPN type
-if [[ "$VPN_TYPE" == "l2tp" ]]; then
-    connect_l2tp
-else
-    connect_ovpn
-fi
+connect_l2tp
 
 exit 0
