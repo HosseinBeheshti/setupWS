@@ -316,6 +316,128 @@ cloudflared access ssh ssh.yourdomain.com
 
 ## Troubleshooting
 
+### Traffic Shows Cloudflare IP Instead of VPS IP
+
+**Symptom**: `curl ifconfig.me` shows IPv6 like `2a09:bac5:3744:278::3f:da` (Cloudflare CGNAT) instead of your VPS IP `65.109.210.232`
+
+**Cause**: Traffic is routing through regular Cloudflare WARP, not your WARP Connector.
+
+**This setup does NOT use WARP Connector for client traffic routing!**
+
+This architecture uses:
+- **Cloudflare Tunnel (cloudflared)** for SSH/VNC access to VPS
+- **Regular Cloudflare WARP** for client traffic (traffic exits via Cloudflare edge, not your VPS)
+
+**To route traffic through YOUR VPS, you need WARP Connector with different configuration:**
+
+#### Option 1: Current Setup (Traffic via Cloudflare Edge)
+- Users get Cloudflare's IP when browsing
+- VPS is ONLY accessed via SSH/VNC through Cloudflare Tunnel
+- This is SIMPLER and what the current README describes
+
+#### Option 2: Route Traffic Through Your VPS (Requires WARP Connector)
+You need additional configuration:
+
+1. **On VPS, check WARP Connector:**
+```bash
+sudo warp-cli status
+# Should show: Connected
+
+sudo warp-cli account
+# Should show your team name
+```
+
+2. **Create WARP Connector tunnel (different from cloudflared tunnel):**
+- Go to: **Networks → Connectors → Cloudflare Tunnels**
+- Select **Create a tunnel**
+- Choose **WARP Connector** (NOT Cloudflared)
+- Follow prompts to register VPS as WARP Connector
+- This allows client traffic to route THROUGH your VPS
+
+3. **Configure device profile for WARP Connector routing:**
+- Go to: **Team & Resources → Devices → Device profiles**
+- Edit Default profile
+- Under **Service mode**, ensure: **Gateway with WARP**
+- Under **Split Tunnels**, verify VPS IP is excluded
+
+**Note**: The current README describes Access via Tunnel only, not WARP Connector routing.
+
+---
+
+### Cannot Access SSH/VNC (Error 1033)
+
+**Symptom**: Accessing `ssh.autoazma.ir` shows "Cloudflare Tunnel error 1033"
+
+**Cause**: Cloudflare Tunnel daemon (`cloudflared`) is not running on VPS.
+
+**Debug Steps:**
+
+1. **Check if cloudflared is installed:**
+```bash
+# On VPS
+cloudflared --version
+```
+
+2. **Check if cloudflared service is running:**
+```bash
+sudo systemctl status cloudflared
+```
+
+If not running:
+```bash
+# Check if service exists
+systemctl list-unit-files | grep cloudflared
+```
+
+3. **If service doesn't exist, you need to install the tunnel:**
+
+Follow section 1.4 tunnel installation steps, or manually:
+
+```bash
+# On VPS - Get tunnel token from Cloudflare dashboard
+# Go to: Networks → Connectors → Cloudflare Tunnels → vps-admin-services
+# Copy the install command and run it
+
+# Example:
+sudo cloudflared service install <YOUR_TUNNEL_TOKEN>
+
+# Start the service
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+
+# Verify
+sudo systemctl status cloudflared
+```
+
+4. **Check tunnel status in dashboard:**
+- Go to: **Networks → Connectors → Cloudflare Tunnels**
+- Find your tunnel `vps-admin-services`
+- Status should show: **Healthy** (green)
+- If status is **Down** or **Inactive**, tunnel is not connected
+
+5. **Check tunnel logs:**
+```bash
+sudo journalctl -u cloudflared -f
+```
+
+6. **Verify tunnel routes:**
+- Go to: **Networks → Connectors → Cloudflare Tunnels → vps-admin-services**
+- Check **Public Hostname** tab
+- Verify routes exist:
+  - `ssh.autoazma.ir` → `ssh://localhost:22`
+  - `vnc-admin.autoazma.ir` → `http://localhost:5901`
+
+7. **Test local services:**
+```bash
+# On VPS - Check if SSH is listening
+sudo netstat -tlnp | grep :22
+
+# Check if VNC is listening
+sudo netstat -tlnp | grep :5901
+```
+
+---
+
 ### Traffic Not Routing Through VPS
 
 **Check WARP status:**
@@ -331,17 +453,7 @@ nslookup cloudflare.com
 - Verify VPS IP is excluded in device profile
 - Mode must be "Exclude IPs and domains"
 
-### Admin Cannot Access SSH/VNC
-
-**Check Access Application policy:**
-1. Go to: **Access controls → Applications**
-2. Verify admin email is in policy
-
-**Check Tunnel status:**
-```bash
-# On VPS
-sudo systemctl status cloudflared
-```
+---
 
 ### Device Enrollment Fails
 
