@@ -111,7 +111,7 @@ Create policy for regular users with system-wide routing only:
 Create tunnel for admin access to SSH and VNC:
 
 1. Go to: **Networks → Connectors → Cloudflare Tunnels**
-2. Click **Create a tunnel**
+2. Click **Add a tunnel**
 3. Select **Cloudflared** and click **Next**
 4. **Tunnel name**: `vps-admin-services`
 5. Click **Save tunnel**
@@ -119,7 +119,7 @@ Create tunnel for admin access to SSH and VNC:
 7. Click **Next**
 
 #### Add SSH Route
-1. Go to **Published applications** tab
+1. Go to **Published applications routes** tab
 2. Configure:
    - **Subdomain**: `ssh`
    - **Domain**: `yourdomain.com`
@@ -144,31 +144,47 @@ Protect SSH and VNC with admin-only policies:
 
 #### SSH Application
 1. Go to: **Access controls → Applications**
-2. Click **Add an application** → **Self-hosted**
-3. Configure application:
+2. Select **Add an application**
+3. Select **Self-hosted**
+4. Configure application:
    - **Application name**: `VPS SSH`
-   - **Application domain**: `ssh.yourdomain.com`
-4. Click **Next**
-5. Add policy:
+   - **Session Duration**: Choose how often users must reauthenticate (e.g., 24 hours)
+5. Select **Add public hostname**
+6. In **Domain** dropdown, select your domain
+7. In **Subdomain**, enter: `ssh`
+8. Add Access policy:
    - **Policy name**: `Admins Only`
    - **Action**: `Allow`
-   - **Selector**: `Emails`
-   - **Value**: `admin1@gmail.com, admin2@gmail.com` (your admin emails)
-6. (Optional) Add device posture checks to policy
-7. Click **Next** → **Add application**
+   - **Include rule**:
+     - **Selector**: `Emails`
+     - **Value**: `admin1@gmail.com, admin2@gmail.com` (your admin emails)
+9. Configure authentication:
+   - Select **One-time PIN** as the identity provider
+   - (Optional) Enable **Instant Auth** if using only one IdP
+10. Select **Next**
+11. (Optional) Configure App Launcher and Block page settings
+12. Select **Next**
+13. (Optional) Configure advanced settings (CORS, cookies)
+14. Select **Save**
 
 #### VNC Application
-1. Click **Add an application** → **Self-hosted**
-2. Configure application:
+1. Select **Add an application**
+2. Select **Self-hosted**
+3. Configure application:
    - **Application name**: `VNC Admin`
-   - **Application domain**: `vnc-admin.yourdomain.com`
-3. Click **Next**
-4. Add policy:
+   - **Session Duration**: Choose how often users must reauthenticate (e.g., 24 hours)
+4. Select **Add public hostname**
+5. In **Domain** dropdown, select your domain
+6. In **Subdomain**, enter: `vnc-admin`
+7. Add Access policy:
    - **Policy name**: `Admins Only`
    - **Action**: `Allow`
-   - **Selector**: `Emails`
-   - **Value**: `admin1@gmail.com, admin2@gmail.com`
-5. Click **Next** → **Add application**
+   - **Include rule**:
+     - **Selector**: `Emails`
+     - **Value**: `admin1@gmail.com, admin2@gmail.com`
+8. Configure authentication:
+   - Select **One-time PIN** as the identity provider
+9. Select **Next** → **Next** → **Save**
 
 **Result**: Only admin emails can access SSH and VNC through Cloudflare Tunnel.
 
