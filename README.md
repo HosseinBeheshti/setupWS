@@ -5,6 +5,10 @@ Replace your VPN with **Cloudflare One Agent + WARP Connector**.
 > **🚀 What You Get:**  
 > **System-wide VPN Replacement** - ALL your device traffic (web, DNS, SSH, games, apps, every protocol) routes through your VPS using **Gateway with WARP** mode. Your entire system appears to be at your VPS location. This is NOT just a web proxy - it's a complete VPN replacement that works on all platforms without conflicts.
 
+> **📚 Quick Start Guides:**
+> - **[QUICK-REFERENCE.md](QUICK-REFERENCE.md)** - Essential config & 30-second verification
+> - **[SYSTEM-WIDE-ROUTING.md](SYSTEM-WIDE-ROUTING.md)** - Complete setup guide & troubleshooting
+
 ## Architecture Overview
 
 ```
