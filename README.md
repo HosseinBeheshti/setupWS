@@ -169,15 +169,9 @@ Protect SSH and VNC with admin-only policies:
 4. Select **Add public hostname**
 5. In **Domain** dropdown, select your domain
 6. In **Subdomain**, enter: `vnc-admin`
-7. Add Access policy:
-   - **Policy name**: `Admins Only`
-   - **Action**: `Allow`
-   - **Include rule**:
-     - **Selector**: `Emails`
-     - **Value**: `admin1@gmail.com, admin2@gmail.com`
-8. Configure authentication:
-   - Select **One-time PIN** as the identity provider
-9. Select **Next** → **Next** → **Save**
+7. Select **Access policies → Select existing policies**:
+   - **Policy name**: `Admin - SSH/VNC + System-wide Routing`
+8. Select **Next** → **Next** → **Save**
 
 **Result**: Only admin emails can access SSH and VNC through Cloudflare Tunnel.
 
