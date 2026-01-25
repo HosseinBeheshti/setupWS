@@ -152,15 +152,8 @@ Protect SSH and VNC with admin-only policies:
 5. Select **Add public hostname**
 6. In **Domain** dropdown, select your domain
 7. In **Subdomain**, enter: `ssh`
-8. Add Access policy:
-   - **Policy name**: `Admins Only`
-   - **Action**: `Allow`
-   - **Include rule**:
-     - **Selector**: `Emails`
-     - **Value**: `admin1@gmail.com, admin2@gmail.com` (your admin emails)
-9. Configure authentication:
-   - Select **One-time PIN** as the identity provider
-   - (Optional) Enable **Instant Auth** if using only one IdP
+8. Add Admin Access policy:
+   - **Policy name**: `Admin - SSH/VNC + System-wide Routing`
 10. Select **Next**
 11. (Optional) Configure App Launcher and Block page settings
 12. Select **Next**
