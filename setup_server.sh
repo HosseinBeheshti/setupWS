@@ -105,47 +105,9 @@ else
     print_warning "setup_l2tp.sh not found, skipping L2TP installation"
 fi
 
-# Step 4: Install and Configure Cloudflare WARP Connector
-print_header "Step 4/6: Installing Cloudflare WARP Connector"
 
-print_message "Adding Cloudflare repository..."
-curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list > /dev/null
-
-print_message "Installing Cloudflare WARP..."
-apt-get update -qq && apt-get install -y -qq cloudflare-warp
-
-print_message "Enabling IP forwarding..."
-sysctl -w net.ipv4.ip_forward=1 > /dev/null
-sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
-
-# Make persistent
-if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-    echo "net.ipv6.conf.all.forwarding = 1" >> /etc/sysctl.conf
-fi
-sysctl -p > /dev/null
-
-print_message "Registering WARP Connector with token..."
-warp-cli registration new --accept-tos > /dev/null 2>&1 || true
-warp-cli registration token "$CLOUDFLARE_WARP_TOKEN" > /dev/null 2>&1
-
-print_message "Connecting WARP..."
-warp-cli connect > /dev/null 2>&1
-
-# Wait for connection
-sleep 3
-
-# Verify connection
-if warp-cli status | grep -q "Connected"; then
-    print_message "✓ WARP Connector registered and connected"
-else
-    print_warning "WARP Connector may not be fully connected yet. Check with: sudo warp-cli status"
-fi
-
-# Step 5: Configure VNC Servers
-print_header "Step 5/6: Configuring VNC Servers"
+# Step 4: Configure VNC Servers
+print_header "Step 4/6: Configuring VNC Servers"
 
 for ((i=1; i<=VNC_USER_COUNT; i++)); do
     username_var="VNCUSER${i}_USERNAME"
@@ -219,7 +181,7 @@ EOF
     fi
 done
 
-# Step 6: Configure Firewall
+# Step 5: Configure Firewall
 print_header "Step 6/6: Configuring Firewall"
 
 print_message "Configuring UFW firewall..."
@@ -249,6 +211,48 @@ ufw allow 1701/udp comment 'L2TP' > /dev/null
 print_message "  ✓ Allowed L2TP/IPSec ports"
 
 print_message "✓ Firewall configured"
+
+# Step 6: Install and Configure Cloudflare WARP Connector
+print_header "Step 6/6: Installing Cloudflare WARP Connector"
+
+print_message "Adding Cloudflare repository..."
+curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list > /dev/null
+
+print_message "Installing Cloudflare WARP..."
+apt-get update -qq && apt-get install -y -qq cloudflare-warp
+
+print_message "Enabling IP forwarding..."
+sysctl -w net.ipv4.ip_forward=1 > /dev/null
+sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+
+# Make persistent
+if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding = 1" >> /etc/sysctl.conf
+fi
+sysctl -p > /dev/null
+
+print_message "Registering WARP Connector with token..."
+warp-cli registration new --accept-tos > /dev/null 2>&1 || true
+warp-cli registration token "$CLOUDFLARE_WARP_TOKEN" > /dev/null 2>&1
+
+print_message "Connecting WARP..."
+warp-cli connect > /dev/null 2>&1
+
+# Wait for connection
+sleep 3
+
+# Verify connection
+if warp-cli status | grep -q "Connected"; then
+    print_message "✓ WARP Connector registered and connected"
+else
+    print_warning "WARP Connector may not be fully connected yet. Check with: sudo warp-cli status"
+fi
+
+
+
 
 # --- Setup Complete ---
 print_header "Setup Complete!"

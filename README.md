@@ -105,23 +105,19 @@ sudo warp-cli connect
 
 ---
 
-### 1.3 Configure Device Enrollment
+### 1.3 Configure Device Enrollment/Connection Policy
 
-Allow authorized users to enroll their devices:
+Allow authorized users to enroll/connect their devices:
 
-1. Go to: **Team & Resources → Devices → Device profiles → Management**
+1. Go to: **Team & Resources → Devices → Management**
 2. Under **Device enrollment**, ensure these settings:
    - **Device enrollment permissions**: Select **Manage**
-3. Under **Enrollment rules**, click **Add a rule**
-4. Configure rule:
-   - **Rule name**: `Allow Gmail Users`
-   - **Selector**: `Emails ending in`
-   - **Value**: `gmail.com`
+3. Under **Access policies**, click **Create new policy**
+4. Configure Policy:
+   - **Policy name**: `vps-warp`
+   - **Selector**: `Emails`
+   - **Value**: `user1@gmail.com`
 5. Click **Save**
-
-**Alternatively**, for specific users:
-- **Selector**: `Emails`
-- **Value**: `user1@gmail.com, user2@gmail.com` (comma-separated list)
 
 ---
 
