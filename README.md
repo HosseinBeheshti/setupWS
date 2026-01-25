@@ -106,36 +106,7 @@ Create policy for regular users with system-wide routing only:
 
 ---
 
-### 1.4 Create Device Posture Checks
-
-Enforce device security requirements:
-
-1. Go to: **Reusable components → Posture checks**
-2. Click **Add new**
-
-#### OS Version Check
-- **Check name**: `OS Version Check`
-- **Check type**: `OS version`
-- **Operating system**: Select all
-- **Operator**: `>=`
-- **Version**: macOS 13.0, Windows 10.0.19041, Linux 5.0, Android 10.0, iOS 15.0
-- Click **Save**
-
-#### Firewall Check
-- **Check name**: `Firewall Enabled`
-- **Check type**: `Firewall`
-- **Enabled**: ✅
-- Click **Save**
-
-#### Disk Encryption Check
-- **Check name**: `Disk Encryption`
-- **Check type**: `Disk encryption`
-- **Encryption detected**: ✅
-- Click **Save**
-
----
-
-### 1.5 Create Cloudflare Tunnel
+### 1.4 Create Cloudflare Tunnel
 
 Create tunnel for admin access to SSH and VNC:
 
@@ -167,7 +138,7 @@ Create tunnel for admin access to SSH and VNC:
 
 ---
 
-### 1.6 Create Access Applications
+### 1.5 Create Access Applications
 
 Protect SSH and VNC with admin-only policies:
 
