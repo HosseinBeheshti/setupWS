@@ -145,11 +145,15 @@ for ((i=1; i<=VNC_USER_COUNT; i++)); do
     chmod 600 /home/$username/.vnc/passwd
     chown $username:$username /home/$username/.vnc/passwd
     
+    # Create .Xresources if it doesn't exist
+    touch /home/$username/.Xresources
+    chown $username:$username /home/$username/.Xresources
+    
     # Create VNC startup script
     cat > /home/$username/.vnc/xstartup << 'EOF'
 #!/bin/bash
-xrdb $HOME/.Xresources
-startxfce4 &
+[ -r $HOME/.Xresources ] && xrdb $HOME/.Xresources
+exec startxfce4
 EOF
     
     chmod +x /home/$username/.vnc/xstartup

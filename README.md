@@ -147,39 +147,13 @@ Prevent routing loops by excluding your VPS IP from WARP tunnel:
 
 ### 2.1 Prepare VPS Configuration
 
-SSH into your VPS and clone the repository:
-
+SSH into your VPS and clone the repository
+then edit `workstation.env` and configure:
 ```bash
-# SSH into your VPS
-ssh root@65.109.210.232
-
 # Clone repository
 git clone https://github.com/HosseinBeheshti/setupWS.git
 cd setupWS
-```
-
-Now edit `workstation.env` and configure:
-
-```bash
 vim workstation.env
-```
-
-**Required Configuration**:
-- `CLOUDFLARE_WARP_TOKEN`: Token from Part 1.2 (WARP Connector creation)
-- `VPS_PUBLIC_IP`: Your VPS IP (auto-detected if not set)
-- `VNC_USER_COUNT`: Number of VNC users
-- `VNCUSER1_USERNAME`, `VNCUSER1_PASSWORD`, `VNCUSER1_PORT`: VNC user credentials
-- `L2TP_IPSEC_PSK`, `L2TP_USERNAME`, `L2TP_PASSWORD`: L2TP fallback VPN credentials
-
-**Example**:
-```bash
-CLOUDFLARE_WARP_TOKEN="eyJhIjo..."
-VPS_PUBLIC_IP="65.109.210.232"
-VNC_USER_COUNT=2
-VNCUSER1_USERNAME="gateway"
-VNCUSER1_PASSWORD="YourSecurePassword123!"
-VNCUSER1_PORT="5910"
-# ... etc
 ```
 
 ---
@@ -224,113 +198,9 @@ systemctl status vncserver@vncuser.service
 # Check firewall rules
 sudo ufw status
 ```
-
-#### Register WARP Connector
-```bash
-# Accept terms of service
-sudo warp-cli registration new --accept-tos
-
-# Register with your tunnel token (from section 1.2)
-sudo warp-cli registration token <YOUR-TOKEN-HERE>
-
-# Connect WARP
-sudo warp-cli connect
-
-# Verify connection
-sudo warp-cli status
-# Should show: Status: Connected
-```
-
-#### Configure iptables for Traffic Forwarding (Optional)
-```bash
-# Allow forwarding between interfaces
 ---
 
-## Part 3: Client Setup
-
-### 3.1 Install Cloudflare One Agent
-
-**Android:**
-- Download from [Google Play Store](https://play.google.com/store/apps/details?id=com.cloudflare.cloudflareoneagent)
-
-**iOS:**
-- Download from [App Store](https://apps.apple.com/app/id6443476492)
-
-**Windows/macOS/Linux:**
-- Download from [cloudflare.com/products/zero-trust/warp/](https://www.cloudflare.com/products/zero-trust/warp/)
-
----
-
-### 3.2 Authenticate to Zero Trust
-
-Connect your device to the Zero Trust organization:
-
-1. Open **Cloudflare One Agent** (or WARP app)
-2. Go to **Settings → Account**
-3. Click **Login with Cloudflare Zero Trust**
-4. Enter team name: `noise-ztna`
-5. Select **One-time PIN**
-6. Enter your Gmail address
-7. Check Gmail for PIN code
-8. Enter PIN to complete authentication
-9. Toggle connection **ON**
-
-**Device enrollment complete!** Your traffic now routes through VPS.
-
----
-
-### 3.3 Access VPS Directly
-
-#### SSH Access
-```bash
-# Direct SSH to VPS (no Cloudflare Tunnel needed)
-ssh root@65.109.210.232
-
-# Or with specific user
-ssh username@65.109.210.232
-```
-
-**Note**: SSH traffic will route through Cloudflare WARP first, then exit from VPS to SSH port.
-
-#### VNC Access
-```bash
-# Using any VNC client (check workstation.env for configured ports)
-vncviewer 65.109.210.232:5910  # User 1 (gateway)
-vncviewer 65.109.210.232:5911  # User 2 (vncuser)
-
-# Or use built-in VNC clients:
-# - Windows: Remote Desktop Connection (after VNC bridge setup)
-# - macOS: Screen Sharing app  
-# - Linux: Remmina, TigerVNC viewer
-```
-
-**VNC Password**: Use the password you set during VPS setup (section 2.2)  
-**VNC Ports**: Configured in `workstation.env` (VNCUSER1_PORT=5910, VNCUSER2_PORT=5911)
-
----
-
-### 3.4 L2TP/IPSec Fallback (Optional)
-
-For devices that don't support WARP, use L2TP/IPSec:
-
-**iOS:**
-1. Settings → VPN → Add VPN Configuration
-2. Type: L2TP
-3. Server: `65.109.210.232`
-4. Account: (from workstation.env)
-5. Password: (from workstation.env)
-6. Secret: (from workstation.env)
-
-**Android:**
-1. Settings → Network & Internet → VPN
-2. Add VPN → L2TP/IPSec PSK
-3. Server address: `65.109.210.232`
-4. L2TP secret: (from workstation.env)
-5. IPSec pre-shared key: (from workstation.env)
-
----
-
-## Part 4: Verification
+## Part 3: Verification
 
 ### For All Users
 
