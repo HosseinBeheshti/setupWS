@@ -60,23 +60,7 @@ Configure Gmail authentication with One-time PIN:
 
 ---
 
-### 1.2 Enable Device Enrollment
-
-Allow Gmail users to enroll devices:
-
-1. Go to: **Team & Resources → Devices → Management**
-2. Under **Device enrollment**, select **Manage**
-3. In the **Policies** tab, click **Add a policy**
-4. Configure:
-   - **Action**: `Allow`
-   - **Selector**: `Emails ending in`
-   - **Value**: `gmail.com`
-5. In the **Login methods** tab, select **One-time PIN**
-6. Click **Save**
-
----
-
-### 1.3 Create Admin Policy
+### 1.2 Create Admin Policy
 
 Create policy for admins with SSH/VNC access + system-wide routing:
 
@@ -99,7 +83,7 @@ Create policy for admins with SSH/VNC access + system-wide routing:
 
 ---
 
-### 1.4 Create User Policy
+### 1.3 Create User Policy
 
 Create policy for regular users with system-wide routing only:
 
@@ -122,7 +106,7 @@ Create policy for regular users with system-wide routing only:
 
 ---
 
-### 1.5 Create Device Posture Checks
+### 1.4 Create Device Posture Checks
 
 Enforce device security requirements:
 
@@ -151,7 +135,7 @@ Enforce device security requirements:
 
 ---
 
-### 1.6 Create Cloudflare Tunnel
+### 1.5 Create Cloudflare Tunnel
 
 Create tunnel for admin access to SSH and VNC:
 
@@ -183,7 +167,7 @@ Create tunnel for admin access to SSH and VNC:
 
 ---
 
-### 1.7 Create Access Applications
+### 1.6 Create Access Applications
 
 Protect SSH and VNC with admin-only policies:
 
