@@ -135,6 +135,10 @@ for ((i=1; i<=VNC_USER_COUNT; i++)); do
         print_message "  Created user: $username"
     fi
     
+    # Kill any existing VNC sessions for this user
+    su - "$username" -c "vncserver -kill :$display" &>/dev/null || true
+    pkill -u "$username" Xvnc &>/dev/null || true
+    
     # Set VNC password
     su - "$username" -c "mkdir -p ~/.vnc"
     echo "$password" | su - "$username" -c "vncpasswd -f" > /home/$username/.vnc/passwd
@@ -172,12 +176,21 @@ EOF
     # Enable and start VNC service
     systemctl daemon-reload
     systemctl enable vncserver@${username}.service > /dev/null 2>&1
-    systemctl start vncserver@${username}.service
+    
+    # Start VNC manually first time to initialize
+    su - "$username" -c "vncserver :${display} -geometry ${resolution} -depth 24 -localhost no" &>/dev/null
+    sleep 2
+    
+    # Then restart with systemd
+    systemctl restart vncserver@${username}.service
+    sleep 2
     
     if systemctl is-active --quiet vncserver@${username}.service; then
         print_message "  ✓ VNC server started for $username on port $port"
     else
-        print_warning "  VNC server for $username may not have started. Check with: systemctl status vncserver@${username}"
+        print_error "  ✗ VNC server failed to start for $username"
+        print_error "    Check logs: journalctl -xeu vncserver@${username}.service"
+        print_error "    Manual test: su - $username -c 'vncserver :${display}'"
     fi
 done
 
@@ -248,9 +261,17 @@ print_message "Connecting WARP Connector..."
 warp-cli connect
 
 # Check connection status
-sleep 3
+sleep 5
 if warp-cli status | grep -q "Connected"; then
     print_message "✓ WARP Connector connected successfully"
+    print_message ""
+    print_warning "IMPORTANT: Configure Split Tunnels in Cloudflare Dashboard:"
+    print_warning "  1. Go to: Settings → WARP Client → Device settings → Profile Settings"
+    print_warning "  2. Split Tunnels: Select 'Tunnel all traffic' (Exclude mode)"
+    print_warning "  3. Or add 0.0.0.0/0 to Include mode to route ALL traffic"
+    print_warning "  4. Save and wait 1-2 minutes for clients to sync"
+    print_warning ""
+    print_warning "Without this, clients will NOT route traffic through VPS!"
 else
     print_error "WARP Connector connection FAILED!"
     print_error "Check status with: sudo warp-cli status"
