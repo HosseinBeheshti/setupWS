@@ -304,7 +304,8 @@ nslookup cloudflare.com
 # Linux: wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && sudo dpkg -i cloudflared-linux-amd64.deb
 
 # Connect via SSH
-cloudflared access ssh ssh.yourdomain.com
+cloudflared access ssh --hostname ssh.yourdomain.com
+
 ```
 
 **Access VNC:**
