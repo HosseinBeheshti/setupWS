@@ -19,10 +19,10 @@ Admin Users                          Regular Users
      │                                    │
 Cloudflare One Agent              Cloudflare One Agent
      │                                    │
-     ├─→ SSH/VNC Access                  │
-     │   (Cloudflare Tunnel)             │
+     ├─→ SSH/VNC Access                   │
+     │   (Cloudflare Tunnel)              │
      │                                    │
-     └─→ System-wide Traffic      ───────┴───> System-wide Traffic
+     └─→ System-wide Traffic      ────────┴───> System-wide Traffic
          (Gateway + WARP)                       (Gateway + WARP)
               │                                      │
               └──────────────┬───────────────────────┘
