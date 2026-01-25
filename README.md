@@ -151,7 +151,7 @@ Prevent routing loops by excluding your VPS IP from WARP tunnel:
 
 ### 2.1 Prepare VPS Configuration
 
-Before running the setup script, prepare your configuration:
+SSH into your VPS and clone the repository:
 
 ```bash
 # SSH into your VPS
@@ -160,92 +160,73 @@ ssh root@65.109.210.232
 # Clone repository
 git clone https://github.com/HosseinBeheshti/setupWS.git
 cd setupWS
+```
 
-# Edit configuration
+Now edit `workstation.env` and configure:
+
+```bash
 vim workstation.env
 ```
 
-Edit `workstation.env` with your settings (VNC password, timezone, etc.)
+**Required Configuration**:
+- `CLOUDFLARE_WARP_TOKEN`: Token from Part 1.2 (WARP Connector creation)
+- `VPS_PUBLIC_IP`: Your VPS IP (auto-detected if not set)
+- `VNC_USER_COUNT`: Number of VNC users
+- `VNCUSER1_USERNAME`, `VNCUSER1_PASSWORD`, `VNCUSER1_PORT`: VNC user credentials
+- `L2TP_IPSEC_PSK`, `L2TP_USERNAME`, `L2TP_PASSWORD`: L2TP fallback VPN credentials
+
+**Example**:
+```bash
+CLOUDFLARE_WARP_TOKEN="eyJhIjo..."
+VPS_PUBLIC_IP="65.109.210.232"
+VNC_USER_COUNT=2
+VNCUSER1_USERNAME="gateway"
+VNCUSER1_PASSWORD="YourSecurePassword123!"
+VNCUSER1_PORT="5910"
+# ... etc
+```
 
 ---
 
-### 2.2 Install Required Applications
+### 2.2 Run Automated Setup
 
-Run these commands step-by-step on your VPS:
+The setup script performs complete VPS configuration automatically:
 
-#### Update System
 ```bash
-sudo apt-get update
-sudo apt-get upgrade -y
+sudo ./setup_server.sh
 ```
 
-#### Install Desktop Environment (for VNC)
+**What This Script Does**:
+1. ✅ Updates system packages
+2. ✅ Installs Ubuntu Desktop + XFCE4
+3. ✅ Installs TigerVNC Server
+4. ✅ Installs L2TP/IPSec VPN (fallback)
+5. ✅ Installs Cloudflare WARP Connector
+6. ✅ Registers WARP Connector with your token
+7. ✅ Creates systemd services for all VNC users
+8. ✅ Starts all VNC servers automatically
+9. ✅ Configures firewall (SSH, VNC ports, L2TP)
+10. ✅ Verifies all services are running
+
+**Duration**: Approximately 15-20 minutes (mostly installing desktop environment).
+
+**After Setup Completes**:
+- All services automatically started
+- VNC servers running on configured ports
+- WARP Connector registered and connected
+- Firewall configured with proper rules
+
+**Verify Installation**:
 ```bash
-sudo apt-get install -y ubuntu-desktop xfce4 xfce4-goodies
-```
+# Check WARP status
+sudo warp-cli status
 
-#### Install VNC Server
-```bash
-sudo apt-get install -y tigervnc-standalone-server tigervnc-common
-```
+# Check VNC services
+systemctl status vncserver@gateway.service
+systemctl status vncserver@vncuser.service
 
-Configure VNC:
-```bash
-# Set VNC password
-vncpasswd
-
-# Create VNC startup script
-mkdir -p ~/.vnc
-cat > ~/.vnc/xstartup << 'EOF'
-#!/bin/bash
-xrdb $HOME/.Xresources
-startxfce4 &
-EOF
-
-chmod +x ~/.vnc/xstartup
-
-# Start VNC server (display :1 = port 5901, :2 = port 5902, etc.)
-# Check workstation.env for configured ports
-vncserver :1 -geometry 1920x1080 -depth 24
-```
-
-**Note**: VNC ports are configured in `workstation.env` (VNCUSER*_PORT). Default is 5910 for user 1, 5911 for user 2.
-
-#### Install L2TP/IPSec VPN (Fallback Option)
-```bash
-# Run L2TP setup script
-sudo ./setup_l2tp.sh
-```
-
-This provides a backup VPN option for clients that don't support WARP.
-
----
-
-### 2.3 Install Cloudflare WARP Connector
-
-Now install the WARP Connector using the commands from **section 1.2**:
-
-#### Install WARP Client
-```bash
-# Add Cloudflare repository
-curl https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
-
-# Install WARP
-sudo apt-get update && sudo apt-get install cloudflare-warp
-```
-
-#### Enable IP Forwarding
-```bash
-# Enable for current session
-sudo sysctl -w net.ipv4.ip_forward=1
-sudo sysctl -w net.ipv6.conf.all.forwarding=1
-
-# Make persistent across reboots
-echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
-echo "net.ipv6.conf.all.forwarding = 1" | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
+# Check firewall rules
+sudo ufw status
 ```
 
 #### Register WARP Connector
@@ -267,67 +248,6 @@ sudo warp-cli status
 #### Configure iptables for Traffic Forwarding (Optional)
 ```bash
 # Allow forwarding between interfaces
-sudo iptables -A FORWARD -i CloudflareWARP -o eth0 -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o CloudflareWARP -j ACCEPT
-
-# Make persistent
-sudo apt-get install -y iptables-persistent
-sudo netfilter-persistent save
-```
-
----
-
-### 2.4 Verify WARP Connector
-
-Check that WARP Connector is properly connected:
-
-```bash
-# Check WARP status
-sudo warp-cli status
-# Expected: Status: Connected
-
-# Check WARP account
-sudo warp-cli account
-# Expected: Shows your team name (noise-ztna)
-
-# Check IP forwarding
-sysctl net.ipv4.ip_forward
-sysctl net.ipv6.conf.all.forwarding
-# Expected: Both should show = 1
-
-# Check if SSH is accessible
-sudo netstat -tlnp | grep :22
-# Expected: Shows SSH listening on port 22
-
-# Check if VNC is accessible
-sudo netstat -tlnp | grep :59
-# Expected: Shows VNC listening on configured ports (5910, 5911, etc.)
-```
-
----
-
-### 2.5 Configure Firewall
-
-Allow direct access to SSH and VNC:
-
-```bash
-# Allow SSH
-sudo ufw allow 22/tcp
-
-# Allow VNC (ports from workstation.env)
-sudo ufw allow 5910/tcp  # VNCUSER1_PORT
-sudo ufw allow 5911/tcp  # VNCUSER2_PORT
-# Add more if you configured additional users
-
-# Allow L2TP/IPSec (fallback VPN)
-sudo ufw allow 500/udp
-sudo ufw allow 4500/udp
-sudo ufw allow 1701/udp
-
-# Enable firewall
-sudo ufw enable
-```
-
 ---
 
 ## Part 3: Client Setup
