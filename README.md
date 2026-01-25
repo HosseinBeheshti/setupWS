@@ -64,7 +64,7 @@ Configure Gmail authentication with One-time PIN:
 
 Allow Gmail users to enroll devices:
 
-1. Go to: **Team & Resources → Devices → Device profiles → Management**
+1. Go to: **Team & Resources → Devices → Management**
 2. Under **Device enrollment**, select **Manage**
 3. In the **Policies** tab, click **Add a policy**
 4. Configure:
