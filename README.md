@@ -85,6 +85,21 @@ This creates the WARP Connector that routes client traffic through your VPS:
 
 ---
 
+### 1.2.1 Add VPS IP to Tunnel Routes
+
+**Important**: Before you can create a target for SSH access, you must add your VPS IP to the tunnel routes:
+
+1. Go to: **Networks → Connectors → Cloudflare Tunnels**
+2. Find your `vps-traffic-routing` tunnel and click on it
+3. Click on the **CIDR** or **Private Networks** tab
+4. Click **Add a CIDR** or **Add IP/CIDR**
+5. Enter your VPS IP: `65.109.210.232/32`
+6. Click **Save**
+
+**Why**: This tells Cloudflare that traffic to this IP should route through your WARP Connector. Without this, the IP won't appear when creating targets in Part 3.
+
+---
+
 ### 1.3 Configure Device Enrollment/Connection Policy
 
 Allow authorized users to enroll/connect their devices:
@@ -188,9 +203,15 @@ First, create a target that represents your SSH server:
 3. Select **Add a target**
 4. Configure Target:
    - **Target hostname**: `vps-server` (or any friendly name)
-   - **IP addresses**: Enter `65.109.210.232` and select it from the dropdown
-   - Select the appropriate virtual network (likely `default`)
+   - **IP addresses**: Enter `65.109.210.232` 
+   - The IP should appear in the dropdown (you added it in section 1.2.1)
+   - Select the IP and virtual network (likely `default`)
 5. Click **Add target**
+
+**Note**: If the IP doesn't appear in the dropdown, verify:
+- You completed section 1.2.1 (added IP to tunnel routes)
+- Go to **Networks → Routes** and confirm `65.109.210.232` is listed
+- Your WARP Connector tunnel is **Healthy**
 
 ### 3.2 Create Infrastructure Application
 
