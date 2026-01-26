@@ -1,18 +1,20 @@
 #!/bin/bash
 
 # ============================================================
-# Cloudflare WARP Connector VPN Replacement - Automated Setup
+# Cloudflare Zero Trust VPN - Automated Setup (cloudflared + Egress)
 # ============================================================
-# This script performs complete VPS setup for WARP Connector:
-# - Installs Cloudflare WARP Connector
-# - Configures WARP Connector with token from workstation.env
-# - Enables IP forwarding for routing
+# This script performs complete VPS setup for cloudflared egress routing:
+# - Installs cloudflared (Cloudflare Tunnel)
+# - Configures tunnel with token from workstation.env
+# - Enables WARP routing for egress
+# - Configures NAT/masquerading for internet egress
+# - Enables IP forwarding
 # - Configures firewall
-# - Starts all services automatically
+# - Starts cloudflared as system service
 #
 # Prerequisites:
 # 1. Complete Part 1 in README.md (Cloudflare dashboard setup)
-# 2. Add CLOUDFLARE_WARP_TOKEN to workstation.env
+# 2. Add CLOUDFLARE_TUNNEL_TOKEN to workstation.env
 #
 # Usage: sudo ./setup_ztna.sh
 # ============================================================
@@ -50,9 +52,15 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Validate Configuration ---
-if [[ -z "$CLOUDFLARE_WARP_TOKEN" ]]; then
-    print_error "CLOUDFLARE_WARP_TOKEN is not set in workstation.env"
+if [[ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]]; then
+    print_error "CLOUDFLARE_TUNNEL_TOKEN is not set in workstation.env"
     print_error "Please complete Part 1 in README.md and add the token"
+    exit 1
+fi
+
+if [[ -z "$TUNNEL_NAME" ]]; then
+    print_error "TUNNEL_NAME is not set in workstation.env"
+    print_error "Please set the tunnel name (e.g., vps-egress)"
     exit 1
 fi
 
@@ -62,9 +70,10 @@ if [[ -z "$VPS_PUBLIC_IP" ]]; then
     print_message "Auto-detected VPS IP: $VPS_PUBLIC_IP"
 fi
 
-print_header "Cloudflare WARP Connector - Automated Setup"
+print_header "Cloudflare Zero Trust - Automated Setup (cloudflared + Egress)"
 echo -e "${CYAN}VPS IP:${NC} $VPS_PUBLIC_IP"
-echo -e "${CYAN}WARP Token:${NC} ${CLOUDFLARE_WARP_TOKEN:0:20}...${CLOUDFLARE_WARP_TOKEN: -10}"
+echo -e "${CYAN}Tunnel Name:${NC} $TUNNEL_NAME"
+echo -e "${CYAN}Tunnel Token:${NC} ${CLOUDFLARE_TUNNEL_TOKEN:0:20}...${CLOUDFLARE_TUNNEL_TOKEN: -10}"
 echo ""
 
 # Step 1: Update System
@@ -97,17 +106,70 @@ if [[ -z "$DEFAULT_INTERFACE" ]]; then
 fi
 print_message "Detected default interface: $DEFAULT_INTERFACE"
 
-# Step 3: Install and Configure Cloudflare WARP Connector
-print_header "Step 3/4: Installing Cloudflare WARP Connector"
+# Step 3: Install and Configure cloudflared
+print_header "Step 3/4: Installing cloudflared (Cloudflare Tunnel)"
 
-# 1. Setup pubkey, apt repo, and update/install WARP
-print_message "Adding Cloudflare repository..."
-curl https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+# 1. Download and install cloudflared
+print_message "Downloading cloudflared..."
+cd /tmp
+wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list
+if [[ ! -f cloudflared-linux-amd64.deb ]]; then
+    print_error "Failed to download cloudflared"
+    exit 1
+fi
 
-print_message "Installing Cloudflare WARP..."
-apt-get update && apt-get install cloudflare-warp
+print_message "Installing cloudflared..."
+dpkg -i cloudflared-linux-amd64.deb
+rm cloudflared-linux-amd64.deb
+
+# Verify installation
+CLOUDFLARED_VERSION=$(cloudflared --version 2>&1 | head -1)
+print_message "✓ cloudflared installed: $CLOUDFLARED_VERSION"
+
+# 2. Create cloudflared configuration directory
+print_message "Creating cloudflared configuration..."
+mkdir -p /etc/cloudflared
+
+# 3. Create configuration file with WARP routing enabled
+print_message "Configuring tunnel for egress routing..."
+cat > /etc/cloudflared/config.yml <<EOF
+tunnel: $TUNNEL_NAME
+credentials-file: /etc/cloudflared/credentials.json
+
+# Enable WARP routing for egress
+warp-routing:
+  enabled: true
+
+# Default ingress rule (required)
+ingress:
+  - service: http_status:404
+EOF
+
+# 4. Create credentials file from token
+print_message "Setting up tunnel credentials..."
+echo "$CLOUDFLARE_TUNNEL_TOKEN" | base64 -d > /etc/cloudflared/credentials.json 2>/dev/null
+
+# If token is not base64 encoded, try using it directly
+if [[ ! -s /etc/cloudflared/credentials.json ]] || ! grep -q "AccountTag" /etc/cloudflared/credentials.json 2>/dev/null; then
+    # Token might be the full service install command or just the token
+    # Extract token if it's in the service install format
+    if [[ "$CLOUDFLARE_TUNNEL_TOKEN" =~ eyJ ]]; then
+        TOKEN_PART=$(echo "$CLOUDFLARE_TUNNEL_TOKEN" | grep -oP 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1)
+        if [[ -n "$TOKEN_PART" ]]; then
+            echo "$TOKEN_PART" | base64 -d > /etc/cloudflared/credentials.json 2>/dev/null
+        fi
+    fi
+fi
+
+# Validate credentials file
+if [[ ! -s /etc/cloudflared/credentials.json ]]; then
+    print_error "Failed to create credentials file"
+    print_error "Please check your CLOUDFLARE_TUNNEL_TOKEN in workstation.env"
+    exit 1
+fi
+
+print_message "✓ Tunnel configured with WARP routing enabled"
 
 # 2. Enable IP forwarding on the host
 print_message "Enabling IP forwarding..."
@@ -121,6 +183,8 @@ fi
 if ! grep -q "net.ipv6.conf.all.forwarding=1" /etc/sysctl.conf; then
     echo "net.ipv6.conf.all.forwarding = 1" >> /etc/sysctl.conf
 fi
+
+print_message "✓ IP forwarding enabled"
 
 # Step 4: Configure NAT for True VPN Functionality
 print_header "Step 4/5: Configuring NAT (Network Address Translation)"
@@ -150,45 +214,57 @@ print_message "✓ NAT configured successfully"
 print_message "  Exit IP for clients will be: $VPS_PUBLIC_IP"
 echo ""
 
-# Step 5: Run the WARP Connector with token
-print_warning "⚠️  WARNING: The next command will disconnect your SSH session!"
-print_warning "⚠️  This is expected behavior when WARP Connector activates."
-print_warning "⚠️  Wait 30 seconds, then reconnect via SSH to verify setup."
-echo ""
-read -p "Press Enter to continue with WARP activation (this will drop SSH)..." -t 10 || true
-echo ""
+# Step 5: Run cloudflared tunnel
+print_header "Step 5/5: Starting cloudflared Service"
 
-print_message "Running WARP Connector with token (SSH will disconnect)..."
-warp-cli connector new "$CLOUDFLARE_WARP_TOKEN"
+print_message "Installing cloudflared as system service..."
+cloudflared service install
 
-print_message "Connecting WARP Connector..."
-warp-cli connect
+print_message "Starting cloudflared service..."
+systemctl start cloudflared
+systemctl enable cloudflared
 
-# Check connection status
+# Wait for service to start
 sleep 5
-if warp-cli status | grep -q "Connected"; then
-    print_message "✓ WARP Connector connected successfully"
-    print_message ""
-    print_warning "IMPORTANT: Configure Split Tunnels in Cloudflare Dashboard:"
-    print_warning "  1. Go to: Settings → WARP Client → Device settings → Profile Settings"
-    print_warning "  2. Split Tunnels: Select 'Tunnel all traffic' (Exclude mode)"
-    print_warning "  3. Or add 0.0.0.0/0 to Include mode to route ALL traffic"
-    print_warning "  4. Save and wait 1-2 minutes for clients to sync"
-    print_warning ""
-    print_warning "Without this, clients will NOT route traffic through VPS!"
+
+# Check service status
+if systemctl is-active --quiet cloudflared; then
+    print_message "✓ cloudflared service started successfully"
+    
+    # Try to get tunnel info
+    print_message "Tunnel information:"
+    cloudflared tunnel info $TUNNEL_NAME 2>/dev/null || print_warning "  (Use 'cloudflared tunnel info $TUNNEL_NAME' to check tunnel details)"
 else
-    print_error "WARP Connector connection FAILED!"
-    print_error "Check status with: sudo warp-cli status"
-    print_error "Check logs with: journalctl -u warp-svc -n 50"
+    print_error "cloudflared service failed to start!"
+    print_error "Check logs with: journalctl -u cloudflared -n 50"
     exit 1
 fi
+
+print_message ""
+print_warning "IMPORTANT: Configure hostname routes in Cloudflare Dashboard:"
+print_warning "  1. Go to: Networks → Routes → Hostname routes"
+print_warning "  2. Click 'Create hostname route'"
+print_warning "  3. Add hostname route:"
+print_warning "     - Hostname: * (for all traffic)"
+print_warning "     - Tunnel: $TUNNEL_NAME"
+print_warning "  4. Save and wait 1-2 minutes"
+print_warning ""
+print_warning "Configure Split Tunnels:"
+print_warning "  1. Go to: Team & Resources → Devices → Device profiles → Default"
+print_warning "  2. Split Tunnels → Manage"
+print_warning "  3. Ensure 100.64.0.0/10 is NOT in exclude list"
+print_warning "  4. Save"
+print_warning ""
+print_warning "Without these, clients will NOT route traffic through VPS!"
 
 
 print_header "Setup Complete!"
 
 echo -e "${GREEN}All components successfully installed and configured!${NC}\n"
 echo -e "${YELLOW}Installed & Configured:${NC}"
-echo -e "  ✓ Cloudflare WARP Connector (registered & connected)"
+echo -e "  ✓ cloudflared tunnel (configured for egress)"
+echo -e "  ✓ WARP routing enabled"
+echo -e "  ✓ NAT/masquerading configured"
 echo -e "  ✓ System IP forwarding enabled"
 echo -e "  ✓ Firewall rules configured"
 echo ""
@@ -200,7 +276,8 @@ echo -e "  SSH Port:          ${GREEN}22${NC}"
 echo ""
 
 echo -e "${CYAN}Service Status:${NC}"
-echo -e "  WARP Connector: ${GREEN}$(warp-cli status 2>/dev/null | head -1 || echo 'Check with: sudo warp-cli status')${NC}"
+echo -e "  cloudflared: ${GREEN}$(systemctl is-active cloudflared)${NC}"
+echo -e "  Tunnel Name: ${GREEN}$TUNNEL_NAME${NC}"
 echo ""
 
 echo -e "${CYAN}NAT Configuration:${NC}"
@@ -210,27 +287,25 @@ echo -e "  Exit IP:          ${GREEN}$VPS_PUBLIC_IP${NC}"
 echo ""
 
 echo -e "${YELLOW}Next Steps:${NC}"
-echo -e "1. ${BLUE}Verify WARP Connector:${NC}"
-echo -e "   ${CYAN}sudo warp-cli status${NC}"
-echo -e "   ${CYAN}sudo warp-cli account${NC}"
+echo -e "1. ${BLUE}Verify cloudflared tunnel:${NC}"
+echo -e "   ${CYAN}sudo systemctl status cloudflared${NC}"
+echo -e "   ${CYAN}sudo cloudflared tunnel info $TUNNEL_NAME${NC}"
+echo -e "   ${CYAN}sudo journalctl -u cloudflared -f${NC}"
 echo ""
 echo -e "2. ${BLUE}Verify NAT is working:${NC}"
-echo -e "   ${CYAN}sudo iptables -t nat -L -v -n${NC}"
-echo -e "   (Check MASQUERADE rule on $DEFAULT_INTERFACE)"
+echo -e "   ${CYAN}sudo iptables -t nat -L -v -n | grep MASQUERADE${NC}"
 echo ""
-echo -e "3. ${BLUE}Configure Split Tunnels in Cloudflare Dashboard:${NC}"
-echo -e "   - Go to: Settings → WARP Client → Device profiles → Default"
-echo -e "   - Split Tunnels: Ensure mode is 'Exclude IPs and domains'"
-echo -e "   - Do NOT exclude 0.0.0.0/0 (all traffic should go through WARP)"
+echo -e "3. ${BLUE}Configure Hostname Routes in Dashboard:${NC}"
+echo -e "   - Networks → Routes → Hostname routes"
+echo -e "   - Add route: Hostname = *, Tunnel = $TUNNEL_NAME"
 echo ""
-echo -e "4. ${BLUE}On client device, test exit IP:${NC}"
+echo -e "4. ${BLUE}Configure Split Tunnels:${NC}"
+echo -e "   - Team & Resources → Devices → Device profiles → Default"
+echo -e "   - Split Tunnels → Remove 100.64.0.0/10 from exclude list"
+echo ""
+echo -e "5. ${BLUE}On client device, test exit IP:${NC}"
 echo -e "   ${CYAN}curl ifconfig.me${NC}"
 echo -e "   Should show: ${GREEN}$VPS_PUBLIC_IP${NC}"
-echo -e "   If it shows Cloudflare IP, traffic is NOT routing through VPS!"
-echo ""
-echo -e "5. ${BLUE}Configure SSH Access (Part 3 in README.md):${NC}"
-echo -e "   - Create SSH application in Cloudflare dashboard"
-echo -e "   - Or use direct SSH: ${CYAN}ssh root@$VPS_PUBLIC_IP${NC}"
 echo ""
 
 echo -e "${GREEN}Setup completed at $(date)${NC}"
