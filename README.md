@@ -2,13 +2,21 @@
 
 Replace traditional VPN with **cloudflared + Egress Policies** - route client traffic through your VPS with Zero Trust security.
 
+## ⚠️ Important Limitation
+
+**Hostname-based routing only**: Cloudflare egress through tunnel is **domain-specific**, not true "all traffic" routing. You must add hostname routes for each domain you want to exit through your VPS. 
+
+- ✅ Good for: Routing specific sites/services through VPS (Google, YouTube, Netflix, etc.)
+- ❌ Not ideal for: True "route everything" VPN behavior on free tier
+- 💰 Enterprise alternative: Purchase dedicated egress IPs for true all-traffic routing
+
 ## What You Get
 
-✅ **VPN Replacement** - Route WARP client traffic through your VPS with your exit IP  
+✅ **Hostname-based VPN** - Route specific domains through your VPS with your exit IP  
 ✅ **SSH Access** - Secure SSH access via Cloudflare Tunnel  
 ✅ **Single Client App** - Cloudflare One Agent on all platforms (Desktop + Mobile)  
 ✅ **Zero Trust Security** - Identity-based access control + Gateway filtering  
-✅ **Custom Exit IP** - Traffic exits from your VPS IP (VPS_PUBLIC_IP)  
+✅ **Custom Exit IP** - Traffic exits from your VPS IP for configured domains
 
 ---
 
@@ -107,25 +115,55 @@ This creates the tunnel that will be used for egress routing:
 
 **Critical**: Configure which domains should exit through your VPS.
 
-**Option A: Route ALL traffic (recommended for VPN replacement)**
+⚠️ **Important Limitation**: Cloudflare egress routing is **hostname-based**, meaning you must specify individual domains. There is no wildcard (`*`) support for routing ALL traffic.
+
+**For VPN-like experience, add commonly used domains:**
 
 1. Go to: **Networks → Routes → Hostname routes**
-2. Click **Create hostname route**
-3. Configure:
-   - **Hostname**: `*` (wildcard for all domains)
+2. Click **Create hostname route** for each domain below
+3. For each route, configure:
+   - **Hostname**: (see list below)
    - **Tunnel**: Select your `vps-egress` tunnel
+   - Click **Confirm** when prompted about WARP device profile
 4. Click **Create route**
 
-**Option B: Route specific domains only**
+**Recommended domains to add** (add more as needed):
+```
+google.com
+*.google.com
+youtube.com
+*.youtube.com
+googleapis.com
+*.googleapis.com
+facebook.com
+*.facebook.com
+twitter.com
+*.twitter.com
+amazon.com
+*.amazon.com
+netflix.com
+*.netflix.com
+github.com
+*.github.com
+stackoverflow.com
+*.stackoverflow.com
+reddit.com
+*.reddit.com
+wikipedia.org
+*.wikipedia.org
+```
 
-Add routes for specific domains:
-- `google.com` - Route Google traffic
-- `*.youtube.com` - Route YouTube traffic  
-- `example.com` - Route specific site
+**Add more domains based on your usage:**
+- For work: Your company domains
+- For streaming: Other video/music platforms
+- For gaming: Game server domains
+- For shopping: E-commerce sites you use
 
-Repeat for each domain you want to exit through VPS.
-
-**Note**: Without hostname routes, traffic will NOT go through your VPS!
+**Note**: 
+- Without hostname routes, traffic goes directly through Cloudflare (not your VPS)
+- You can check Gateway DNS logs to see which domains you're accessing most
+- Subdomains with `*.` prefix will match all subdomains (e.g., `*.google.com` matches `mail.google.com`, `drive.google.com`, etc.)
+- You'll need to add hostname routes for any domain you want to exit through your VPS
 
 ---
 
@@ -162,25 +200,45 @@ Note: include this policy in the **Device enrollment permissions**
 
 ### 1.4 Configure Split Tunnels for Egress
 
-**Critical**: Configure split tunnels to allow initial resolved IPs:
+**Critical**: Configure split tunnels to allow initial resolved IPs while excluding only necessary private ranges.
 
 1. Go to: **Team & Resources → Devices → Device profiles**
 2. Find the **Default** profile and click **Configure**
 3. Scroll to **Split Tunnels** section
 4. Click **Manage**
 5. Ensure mode is: **Exclude IPs and domains**
-6. **REMOVE** `100.64.0.0/10` from exclude list (if present)
-   - This is required for hostname-based egress routing
-   - Gateway uses 100.80.0.0/16 range for "initial resolved IPs"
-7. Only exclude private networks:
+6. **IMPORTANT**: Gateway needs access to `100.64.0.0/10` (CGNAT range) for hostname-based egress.
+   
+   **If `100.64.0.0/10` is in your exclude list:**
+   - Click **Remove** to delete it
+   - Then add back ONLY the specific ranges you want to exclude:
+     ```
+     100.64.0.0/12    (excludes 100.64.x.x - 100.79.x.x)
+     100.81.0.0/16    (excludes 100.81.x.x)
+     100.82.0.0/15    (excludes 100.82.x.x - 100.83.x.x)
+     100.84.0.0/14    (excludes 100.84.x.x - 100.87.x.x)
+     100.88.0.0/13    (excludes 100.88.x.x - 100.95.x.x)
+     100.96.0.0/12    (excludes 100.96.x.x - 100.111.x.x)
+     100.112.0.0/12   (excludes 100.112.x.x - 100.127.x.x)
+     ```
+   - This excludes most of 100.64.0.0/10 BUT leaves `100.80.0.0/16` accessible
+   - Gateway uses `100.80.0.0/16` for "initial resolved IPs" required for egress
+
+7. Also exclude private networks (if not already present):
    ```
    10.0.0.0/8
    172.16.0.0/12
    192.168.0.0/16
    ```
+
 8. Click **Save**
 
-**Important**: Without removing 100.64.0.0/10, egress through your tunnel will NOT work!
+**Why this matters**: 
+- Cloudflare Gateway uses `100.80.0.0/16` (within `100.64.0.0/10`) for "initial resolved IPs"
+- When you access a hostname route domain, Gateway resolves it to an IP in this range
+- WARP client routes this IP through the tunnel to your VPS
+- Without access to `100.80.0.0/16`, hostname-based egress will NOT work
+- When creating hostname routes, you'll see a warning if this is not configured correctly
 
 ---
 
