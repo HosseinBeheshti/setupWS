@@ -139,6 +139,86 @@ Configure split tunnels to route all traffic through WARP:
 
 ---
 
+Configure SSH Access
+Since all traffic routes through Cloudflare WARP (including SSH), you need to configure Access for Infrastructure to securely access your server via SSH.
+
+### 1.5 Add a Target
+
+First, create a target that represents your SSH server:
+
+1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/)
+2. Navigate to: **Access controls → Targets**
+3. Select **Add a target**
+4. Configure Target:
+   - **Target hostname**: `vps-server` (or any friendly name)
+   - **IP addresses**: Enter `65.109.210.232` 
+   - The IP should appear in the dropdown (you added it in section 1.2.1)
+   - Select the IP and virtual network (likely `default`)
+5. Click **Add target**
+
+**Note**: If the IP doesn't appear in the dropdown, verify:
+- You completed section 1.2.1 (added IP to tunnel routes)
+- Go to **Networks → Routes** and confirm `65.109.210.232` is listed
+- Your WARP Connector tunnel is **Healthy**
+
+### 1.6 Create Infrastructure Application
+
+Now create an infrastructure application to secure the target:
+
+1. Go to: **Access controls → Applications**
+2. Select **Add an application**
+3. Select **Infrastructure**
+4. Configure Application:
+   - **Application name**: `SSH to VPS`
+5. Under **Target criteria**:
+   - **Target hostname**: Select `vps-server` (the target you created)
+   - **Protocol**: `SSH`
+   - **Port**: `22`
+6. Click **Next**
+7. **Add a policy**:
+   - **Policy name**: `Allow SSH Access`
+   - **Action**: `Allow`
+   - **Configure rules**:
+     - **Selector**: `Emails`
+     - **Value**: `user1@gmail.com` (your email)
+   - **Connection context**:
+     - **SSH user**: Enter the UNIX usernames you want to allow (e.g., `root`)
+     - Optionally enable: **Allow users to log in as their email alias**
+8. Click **Add application**
+
+### 1.7 Configure SSH Server
+
+For enhanced security and SSH command logging, configure your VPS to trust Cloudflare's SSH Certificate Authority:
+
+1. **Generate Cloudflare SSH CA:**
+   - Go to: **Access controls → Service credentials → SSH**
+   - Select **Add a certificate**
+   - Under **SSH with Access for Infrastructure**, select **Generate SSH CA**
+   - Copy the CA public key
+
+2. **On your VPS, save the public key:**
+   ```bash
+   # Create the CA public key file
+   sudo vim /etc/ssh/ca.pub
+   # Paste the public key from Cloudflare
+   ```
+
+3. **Configure sshd to trust the CA:**
+   ```bash
+   # Edit sshd_config
+   sudo vim /etc/ssh/sshd_config
+   
+   # Add these lines at the top:
+   PubkeyAuthentication yes
+   TrustedUserCAKeys /etc/ssh/ca.pub
+   ```
+
+4. **Reload SSH service:**
+   ```bash
+   sudo systemctl reload sshd
+   ```
+---
+
 ## Part 2: VPS Server Setup
 
 ### 2.1 Prepare VPS Configuration
@@ -151,7 +231,6 @@ git clone https://github.com/HosseinBeheshti/setupWS.git
 cd setupWS
 vim workstation.env
 ```
-
 ---
 
 ### 2.2 Run Automated Setup
@@ -190,85 +269,7 @@ sudo ufw status
 ```
 ---
 
-## Part 3: Configure SSH Access
 
-Since all traffic routes through Cloudflare WARP (including SSH), you need to configure Access for Infrastructure to securely access your server via SSH.
-
-### 3.1 Add a Target
-
-First, create a target that represents your SSH server:
-
-1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/)
-2. Navigate to: **Access controls → Targets**
-3. Select **Add a target**
-4. Configure Target:
-   - **Target hostname**: `vps-server` (or any friendly name)
-   - **IP addresses**: Enter `65.109.210.232` 
-   - The IP should appear in the dropdown (you added it in section 1.2.1)
-   - Select the IP and virtual network (likely `default`)
-5. Click **Add target**
-
-**Note**: If the IP doesn't appear in the dropdown, verify:
-- You completed section 1.2.1 (added IP to tunnel routes)
-- Go to **Networks → Routes** and confirm `65.109.210.232` is listed
-- Your WARP Connector tunnel is **Healthy**
-
-### 3.2 Create Infrastructure Application
-
-Now create an infrastructure application to secure the target:
-
-1. Go to: **Access controls → Applications**
-2. Select **Add an application**
-3. Select **Infrastructure**
-4. Configure Application:
-   - **Application name**: `SSH to VPS`
-5. Under **Target criteria**:
-   - **Target hostname**: Select `vps-server` (the target you created)
-   - **Protocol**: `SSH`
-   - **Port**: `22`
-6. Click **Next**
-7. **Add a policy**:
-   - **Policy name**: `Allow SSH Access`
-   - **Action**: `Allow`
-   - **Configure rules**:
-     - **Selector**: `Emails`
-     - **Value**: `user1@gmail.com` (your email)
-   - **Connection context**:
-     - **SSH user**: Enter the UNIX usernames you want to allow (e.g., `root`)
-     - Optionally enable: **Allow users to log in as their email alias**
-8. Click **Add application**
-
-### 3.3 Configure SSH Server (Optional but Recommended)
-
-For enhanced security and SSH command logging, configure your VPS to trust Cloudflare's SSH Certificate Authority:
-
-1. **Generate Cloudflare SSH CA:**
-   - Go to: **Access controls → Service credentials → SSH**
-   - Select **Add a certificate**
-   - Under **SSH with Access for Infrastructure**, select **Generate SSH CA**
-   - Copy the CA public key
-
-2. **On your VPS, save the public key:**
-   ```bash
-   # Create the CA public key file
-   sudo vim /etc/ssh/ca.pub
-   # Paste the public key from Cloudflare
-   ```
-
-3. **Configure sshd to trust the CA:**
-   ```bash
-   # Edit sshd_config
-   sudo vim /etc/ssh/sshd_config
-   
-   # Add these lines at the top:
-   PubkeyAuthentication yes
-   TrustedUserCAKeys /etc/ssh/ca.pub
-   ```
-
-4. **Reload SSH service:**
-   ```bash
-   sudo systemctl reload sshd
-   ```
 
 ### 3.4 Connect via SSH
 
@@ -295,7 +296,7 @@ warp-cli target list
 
 ---
 
-## Part 4: Verification
+## Part 3: Verification
 
 ### Understanding IP Routing
 
