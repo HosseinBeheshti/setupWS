@@ -130,19 +130,7 @@ EOF
 
 print_message "=== Starting VNC Server Setup ==="
 
-# System Update and Package Installation
-print_message "Updating package lists..."
-apt-get update
-
-print_message "Installing required packages..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    xfce4 \
-    xfce4-goodies \
-    dbus-x11 \
-    vim \
-    tigervnc-standalone-server \
-    ufw \
-    firefox
+# Note: Required packages are installed by setup_ws.sh
 
 # Setup Firewall
 print_message "Configuring basic firewall rules..."
@@ -180,113 +168,22 @@ for ((i=1; i<=VNC_USER_COUNT; i++)); do
     setup_vnc_user "$username" "$password" "$display" "$resolution" "$port"
 done
 
-# --- Additional Applications Installation ---
-# Install additional applications for each VNC user with sudo access
-install_additional_apps_for_users() {
-    print_message "Installing additional applications for VNC users..."
-    
-    if [[ -z "$ADDITIONAL_APPS" ]]; then
-        print_message "No additional applications specified."
-        return
-    fi
-    
-    # Get the first VNC user to run installations
-    first_username_var="VNCUSER1_USERNAME"
-    first_password_var="VNCUSER1_PASSWORD"
-    first_username="${!first_username_var}"
-    first_password="${!first_password_var}"
-    
-    if [[ -z "$first_username" ]]; then
-        print_error "No VNC user found to install applications"
-        return
-    fi
-    
-    print_message "Installing applications as user: $first_username"
-    
-    for app in $ADDITIONAL_APPS; do
-        case $app in
-            docker)
-                print_message "Installing Docker Engine..."
-                sudo -u "$first_username" bash <<EOFDOCKER
-# Install prerequisites
-echo '$first_password' | sudo -S apt-get install -y ca-certificates curl gnupg
-
-# Add Docker's official GPG key
-echo '$first_password' | sudo -S install -m 0755 -d /etc/apt/keyrings
-echo '$first_password' | sudo -S sh -c 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg'
-echo '$first_password' | sudo -S chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Set up the Docker repository
-echo '$first_password' | sudo -S sh -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list'
-
-# Install Docker Engine and Docker Compose
-echo '$first_password' | sudo -S apt-get update
-echo '$first_password' | sudo -S apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-EOFDOCKER
-                
-                # Add all VNC users to docker group
-                for ((i=1; i<=VNC_USER_COUNT; i++)); do
-                    username_var="VNCUSER${i}_USERNAME"
-                    username="${!username_var}"
-                    if [[ -n "$username" ]]; then
-                        usermod -aG docker "$username" 2>/dev/null || true
-                    fi
-                done
-                
-                print_message "Docker installed successfully."
-                ;;
-            
-            vscode)
-                print_message "Installing VS Code..."
-                sudo -u "$first_username" bash <<EOFVSCODE
-# Install dependencies
-echo '$first_password' | sudo -S apt-get install -y software-properties-common apt-transport-https wget
-
-# Add Microsoft GPG key
-echo '$first_password' | sudo -S sh -c 'wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/packages.microsoft.gpg'
-
-# Add VS Code repository
-echo '$first_password' | sudo -S sh -c 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list'
-
-# Install VS Code
-echo '$first_password' | sudo -S apt-get update
-echo '$first_password' | sudo -S apt-get install -y code
-EOFVSCODE
-                
-                print_message "VS Code installed successfully."
-                ;;
-            
-            google-chrome-stable)
-                print_message "Installing Google Chrome..."
-                sudo -u "$first_username" bash <<EOFCHROME
-# Download and add Google Chrome signing key
-echo '$first_password' | sudo -S sh -c 'wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -'
-
-# Add Google Chrome repository
-echo '$first_password' | sudo -S sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
-
-# Install Google Chrome
-echo '$first_password' | sudo -S apt-get update
-echo '$first_password' | sudo -S apt-get install -y google-chrome-stable
-EOFCHROME
-                
-                print_message "Google Chrome installed successfully."
-                ;;
-            
-            *)
-                # Install regular packages
-                print_message "Installing $app..."
-                sudo -u "$first_username" bash -c "echo '$first_password' | sudo -S apt-get install -y $app" || print_warning "Failed to install $app"
-                ;;
-        esac
+# --- Add VNC users to docker group if Docker is installed ---
+if command -v docker &> /dev/null; then
+    print_message "Adding VNC users to docker group..."
+    for ((i=1; i<=VNC_USER_COUNT; i++)); do
+        username_var="VNCUSER${i}_USERNAME"
+        username="${!username_var}"
+        if [[ -n "$username" ]]; then
+            usermod -aG docker "$username" 2>/dev/null || true
+            print_message "  Added $username to docker group"
+        fi
     done
-    
-    print_message "Additional applications installation complete."
-}
+fi
 
-# Install additional applications (runs as VNC user with sudo)
-install_additional_apps_for_users
-
+# Final Information
+IP_ADDRESS=$(hostname -I | awk '{print $1}')
+    print_message "Installing additional applications for VNC users..."
 # Final Information
 IP_ADDRESS=$(hostname -I | awk '{print $1}')
 print_message "=== VNC Server Setup Complete ==="

@@ -1,15 +1,12 @@
 #!/bin/bash
 
 # ============================================================
-# Cloudflare Zero Trust VPN - Automated Setup (cloudflared + Egress)
+# Cloudflare Zero Trust Access Setup (SSH/VNC only)
 # ============================================================
-# This script performs complete VPS setup for cloudflared egress routing:
+# This script configures Cloudflare Access for SSH and VNC connections:
 # - Installs cloudflared (Cloudflare Tunnel)
-# - Configures tunnel with token from workstation.env
-# - Enables WARP routing for egress
-# - Configures NAT/masquerading for internet egress
-# - Enables IP forwarding
-# - Configures firewall
+# - Configures tunnel for SSH/VNC access (NO traffic routing)
+# - Opens firewall ports for WireGuard and L2TP (direct VPS access)
 # - Starts cloudflared as system service
 #
 # Prerequisites:
@@ -60,7 +57,7 @@ fi
 
 if [[ -z "$TUNNEL_NAME" ]]; then
     print_error "TUNNEL_NAME is not set in workstation.env"
-    print_error "Please set the tunnel name (e.g., vps-egress)"
+    print_error "Please set the tunnel name (e.g., vps-access)"
     exit 1
 fi
 
@@ -70,22 +67,14 @@ if [[ -z "$VPS_PUBLIC_IP" ]]; then
     print_message "Auto-detected VPS IP: $VPS_PUBLIC_IP"
 fi
 
-print_header "Cloudflare Zero Trust - Automated Setup (cloudflared + Egress)"
+print_header "Cloudflare Zero Trust Access Setup (SSH/VNC)"
 echo -e "${CYAN}VPS IP:${NC} $VPS_PUBLIC_IP"
 echo -e "${CYAN}Tunnel Name:${NC} $TUNNEL_NAME"
 echo -e "${CYAN}Tunnel Token:${NC} ${CLOUDFLARE_TUNNEL_TOKEN:0:20}...${CLOUDFLARE_TUNNEL_TOKEN: -10}"
 echo ""
 
-# Step 1: Update System
-print_header "Step 1/3: Updating System"
-print_message "Updating package lists..."
-apt-get update -qq
-print_message "Upgrading packages (this may take several minutes)..."
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
-print_message "✓ System updated"
-
-# Step 2: Configure Firewall
-print_header "Step 2/3: Configuring Firewall"
+# Step 1: Configure Firewall (Allow VPN Ports for Direct Access)
+print_header "Step 1/4: Configuring Firewall"
 
 print_message "Configuring UFW firewall..."
 ufw --force enable > /dev/null
@@ -94,20 +83,32 @@ ufw --force enable > /dev/null
 ufw allow 22/tcp comment 'SSH' > /dev/null
 print_message "  ✓ Allowed SSH (port 22)"
 
+# Allow WireGuard (direct access, bypass Cloudflare)
+ufw allow ${WG_SERVER_PORT:-51820}/udp comment 'WireGuard VPN' > /dev/null
+print_message "  ✓ Allowed WireGuard (port ${WG_SERVER_PORT:-51820}/udp)"
+
+# Allow L2TP/IPsec (direct access, bypass Cloudflare)
+if [[ " $VPN_LIST " =~ " l2tp " ]]; then
+    ufw allow 500/udp comment 'IPsec' > /dev/null
+    ufw allow 1701/udp comment 'L2TP' > /dev/null
+    ufw allow 4500/udp comment 'IPsec NAT-T' > /dev/null
+    print_message "  ✓ Allowed L2TP/IPsec (ports 500, 1701, 4500/udp)"
+fi
+
+# Allow VNC ports (for direct access if needed)
+for ((i=1; i<=VNC_USER_COUNT; i++)); do
+    port_var="VNCUSER${i}_PORT"
+    port="${!port_var}"
+    if [[ -n "$port" ]]; then
+        ufw allow ${port}/tcp comment "VNC User ${i}" > /dev/null
+        print_message "  ✓ Allowed VNC port $port/tcp"
+    fi
+done
+
 print_message "✓ Firewall configured"
 
-# Step 2.5: Detect Network Interface
-print_header "Step 2.5/4: Detecting Network Interface"
-DEFAULT_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -n 1)
-if [[ -z "$DEFAULT_INTERFACE" ]]; then
-    print_error "Could not detect default network interface"
-    print_error "Please manually configure NAT rules"
-    exit 1
-fi
-print_message "Detected default interface: $DEFAULT_INTERFACE"
-
-# Step 3: Install and Configure cloudflared
-print_header "Step 3/4: Installing cloudflared (Cloudflare Tunnel)"
+# Step 2: Install cloudflared
+print_header "Step 2/4: Installing cloudflared (Cloudflare Tunnel)"
 
 # 1. Download and install cloudflared
 print_message "Downloading cloudflared..."
@@ -131,17 +132,14 @@ print_message "✓ cloudflared installed: $CLOUDFLARED_VERSION"
 print_message "Creating cloudflared configuration..."
 mkdir -p /etc/cloudflared
 
-# 3. Create configuration file with WARP routing enabled
-print_message "Configuring tunnel for egress routing..."
+# 3. Create configuration file for SSH/VNC access (NO WARP routing)
+print_message "Configuring tunnel for SSH/VNC access..."
 cat > /etc/cloudflared/config.yml <<EOF
 tunnel: $TUNNEL_NAME
 credentials-file: /etc/cloudflared/credentials.json
 
-# Enable WARP routing for egress
-warp-routing:
-  enabled: true
-
-# Default ingress rule (required)
+# Ingress rules for SSH and VNC access
+# These will be configured via Cloudflare Access Applications in the dashboard
 ingress:
   - service: http_status:404
 EOF
@@ -169,53 +167,10 @@ if [[ ! -s /etc/cloudflared/credentials.json ]]; then
     exit 1
 fi
 
-print_message "✓ Tunnel configured with WARP routing enabled"
+print_message "✓ Tunnel configured for SSH/VNC access"
 
-# 2. Enable IP forwarding on the host
-print_message "Enabling IP forwarding..."
-sysctl -w net.ipv4.ip_forward=1
-sysctl -w net.ipv6.conf.all.forwarding=1
-
-# Make persistent
-if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-fi
-if ! grep -q "net.ipv6.conf.all.forwarding=1" /etc/sysctl.conf; then
-    echo "net.ipv6.conf.all.forwarding = 1" >> /etc/sysctl.conf
-fi
-
-print_message "✓ IP forwarding enabled"
-
-# Step 4: Configure NAT for True VPN Functionality
-print_header "Step 4/5: Configuring NAT (Network Address Translation)"
-
-print_warning "⚠️  Configuring NAT to route traffic through VPS (true VPN mode)"
-print_message "This allows all client traffic to exit via your VPS IP"
-echo ""
-
-# Install iptables-persistent for saving rules
-print_message "Installing iptables-persistent..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent > /dev/null 2>&1
-
-# Configure NAT/masquerading
-print_message "Configuring NAT on interface: $DEFAULT_INTERFACE"
-iptables -t nat -A POSTROUTING -o "$DEFAULT_INTERFACE" -j MASQUERADE
-
-# Allow forwarding from WARP interface to internet
-print_message "Configuring forwarding rules..."
-iptables -A FORWARD -i CloudflareWARP -o "$DEFAULT_INTERFACE" -j ACCEPT
-iptables -A FORWARD -i "$DEFAULT_INTERFACE" -o CloudflareWARP -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-# Save rules
-print_message "Saving iptables rules..."
-netfilter-persistent save > /dev/null 2>&1
-
-print_message "✓ NAT configured successfully"
-print_message "  Exit IP for clients will be: $VPS_PUBLIC_IP"
-echo ""
-
-# Step 5: Run cloudflared tunnel
-print_header "Step 5/5: Starting cloudflared Service"
+# Step 3: Start cloudflared Service
+print_header "Step 3/4: Starting cloudflared Service"
 
 print_message "Installing cloudflared as system service..."
 cloudflared service install
@@ -240,39 +195,42 @@ else
     exit 1
 fi
 
-print_message ""
-print_warning "IMPORTANT: Configure hostname routes in Cloudflare Dashboard:"
-print_warning "  1. Go to: Networks → Routes → Hostname routes"
-print_warning "  2. Click 'Create hostname route'"
-print_warning "  3. Add hostname route:"
-print_warning "     - Hostname: * (for all traffic)"
-print_warning "     - Tunnel: $TUNNEL_NAME"
-print_warning "  4. Save and wait 1-2 minutes"
-print_warning ""
-print_warning "Configure Split Tunnels:"
-print_warning "  1. Go to: Team & Resources → Devices → Device profiles → Default"
-print_warning "  2. Split Tunnels → Manage"
-print_warning "  3. Ensure 100.64.0.0/10 is NOT in exclude list"
-print_warning "  4. Save"
-print_warning ""
-print_warning "Without these, clients will NOT route traffic through VPS!"
+# Step 4: Display Configuration Summary
+print_header "Step 4/4: Configuration Summary"
 
+print_message "✓ Cloudflare Tunnel installed and running"
+print_message "✓ Firewall configured with VPN ports open"
+print_message "✓ Ready for Cloudflare Access configuration"
 
 print_header "Setup Complete!"
 
-echo -e "${GREEN}All components successfully installed and configured!${NC}\n"
+echo -e "${GREEN}Cloudflare Zero Trust Access successfully configured!${NC}\n"
+
 echo -e "${YELLOW}Installed & Configured:${NC}"
-echo -e "  ✓ cloudflared tunnel (configured for egress)"
-echo -e "  ✓ WARP routing enabled"
-echo -e "  ✓ NAT/masquerading configured"
-echo -e "  ✓ System IP forwarding enabled"
-echo -e "  ✓ Firewall rules configured"
+echo -e "  ✓ cloudflared tunnel (for SSH/VNC access)"
+echo -e "  ✓ Firewall rules (SSH, WireGuard, L2TP, VNC ports)"
+echo -e "  ✓ VPN ports open for direct access (bypass Cloudflare)"
 echo ""
 
 echo -e "${CYAN}VPS Information:${NC}"
-echo -e "  IP Address:        ${GREEN}$VPS_PUBLIC_IP${NC}"
-echo -e "  Network Interface: ${GREEN}$DEFAULT_INTERFACE${NC}"
-echo -e "  SSH Port:          ${GREEN}22${NC}"
+echo -e "  IP Address:   ${GREEN}$VPS_PUBLIC_IP${NC}"
+echo -e "  SSH Port:     ${GREEN}22${NC}"
+echo -e "  WireGuard:    ${GREEN}${WG_SERVER_PORT:-51820}/udp${NC}"
+if [[ " $VPN_LIST " =~ " l2tp " ]]; then
+    echo -e "  L2TP/IPsec:   ${GREEN}500, 1701, 4500/udp${NC}"
+fi
+echo ""
+
+echo -e "${CYAN}VNC Ports:${NC}"
+for ((i=1; i<=VNC_USER_COUNT; i++)); do
+    port_var="VNCUSER${i}_PORT"
+    username_var="VNCUSER${i}_USERNAME"
+    port="${!port_var}"
+    username="${!username_var}"
+    if [[ -n "$port" ]]; then
+        echo -e "  ${username:-User $i}: ${GREEN}${port}/tcp${NC}"
+    fi
+done
 echo ""
 
 echo -e "${CYAN}Service Status:${NC}"
@@ -280,32 +238,36 @@ echo -e "  cloudflared: ${GREEN}$(systemctl is-active cloudflared)${NC}"
 echo -e "  Tunnel Name: ${GREEN}$TUNNEL_NAME${NC}"
 echo ""
 
-echo -e "${CYAN}NAT Configuration:${NC}"
-echo -e "  NAT/Masquerading: ${GREEN}Enabled on $DEFAULT_INTERFACE${NC}"
-echo -e "  Forwarding Rules: ${GREEN}Configured${NC}"
-echo -e "  Exit IP:          ${GREEN}$VPS_PUBLIC_IP${NC}"
+echo -e "${YELLOW}Next Steps - Complete Cloudflare Dashboard Configuration:${NC}"
 echo ""
-
-echo -e "${YELLOW}Next Steps:${NC}"
-echo -e "1. ${BLUE}Verify cloudflared tunnel:${NC}"
+echo -e "1. ${BLUE}Create Access Applications for SSH:${NC}"
+echo -e "   - Go to: Access → Applications → Add an application"
+echo -e "   - Application type: Self-hosted"
+echo -e "   - Configure SSH access policies"
+echo ""
+echo -e "2. ${BLUE}Create Access Applications for VNC:${NC}"
+echo -e "   - Add applications for each VNC port"
+echo -e "   - Configure access policies with Gmail + OTP"
+echo ""
+echo -e "3. ${BLUE}Verify Tunnel Connection:${NC}"
 echo -e "   ${CYAN}sudo systemctl status cloudflared${NC}"
 echo -e "   ${CYAN}sudo cloudflared tunnel info $TUNNEL_NAME${NC}"
-echo -e "   ${CYAN}sudo journalctl -u cloudflared -f${NC}"
 echo ""
-echo -e "2. ${BLUE}Verify NAT is working:${NC}"
-echo -e "   ${CYAN}sudo iptables -t nat -L -v -n | grep MASQUERADE${NC}"
+echo -e "4. ${BLUE}VPN Access (Direct, NOT via Cloudflare):${NC}"
+echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
+if [[ " $VPN_LIST " =~ " l2tp " ]]; then
+    echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
+fi
 echo ""
-echo -e "3. ${BLUE}Configure Hostname Routes in Dashboard:${NC}"
-echo -e "   - Networks → Routes → Hostname routes"
-echo -e "   - Add route: Hostname = *, Tunnel = $TUNNEL_NAME"
+echo -e "4. ${BLUE}VPN Access (Direct, NOT via Cloudflare):${NC}"
+echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
+if [[ " $VPN_LIST " =~ " l2tp " ]]; then
+    echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
+fi
 echo ""
-echo -e "4. ${BLUE}Configure Split Tunnels:${NC}"
-echo -e "   - Team & Resources → Devices → Device profiles → Default"
-echo -e "   - Split Tunnels → Remove 100.64.0.0/10 from exclude list"
-echo ""
-echo -e "5. ${BLUE}On client device, test exit IP:${NC}"
-echo -e "   ${CYAN}curl ifconfig.me${NC}"
-echo -e "   Should show: ${GREEN}$VPS_PUBLIC_IP${NC}"
+
+echo -e "${CYAN}Important:${NC} VPN traffic (WireGuard/L2TP) bypasses Cloudflare and connects directly to VPS"
+echo -e "${CYAN}           SSH/VNC access uses Cloudflare Access for identity-aware security${NC}"
 echo ""
 
 echo -e "${GREEN}Setup completed at $(date)${NC}"

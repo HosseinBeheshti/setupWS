@@ -85,14 +85,7 @@ for vpn_type in "${VPN_ARRAY[@]}"; do
     TABLE_NUM=$((TABLE_NUM + 1))
 done
 
-# Install required networking tools
-print_message "Installing required networking tools..."
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    iproute2 \
-    iptables \
-    iptables-persistent \
-    netfilter-persistent
+# Note: Required packages are installed by setup_ws.sh
 
 # Display configured routing tables
 print_message "=== Configured Routing Tables ==="

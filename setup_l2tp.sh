@@ -46,45 +46,7 @@ L2TP_FWMARK="200"
 
 print_message "=== Starting L2TP/IPsec VPN Setup ==="
 
-# --- Install Required Packages ---
-print_message "Installing L2TP/IPsec VPN client packages..."
-
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    strongswan \
-    xl2tpd \
-    network-manager-l2tp \
-    iptables \
-    netfilter-persistent \
-    netcat-openbsd
-
-# Install applications specified in VPN_APPS
-if [[ -n "$VPN_APPS" ]]; then
-    print_message "Installing VPN applications: $VPN_APPS"
-    for app in $VPN_APPS; do
-        case $app in
-            "xrdp")
-                print_message "Installing xRDP server..."
-                apt-get install -y xrdp
-                systemctl enable xrdp
-                if command -v ufw &> /dev/null; then
-                    ufw allow 3389/tcp comment "xRDP"
-                else
-                    print_warning "ufw not available, skipping firewall rule for xRDP"
-                fi
-                print_message "xRDP installed and configured"
-                ;;
-            "remmina")
-                print_message "Installing Remmina..."
-                apt-get install -y remmina remmina-plugin-rdp remmina-plugin-vnc freerdp2-x11
-                ;;
-            *)
-                print_message "Installing custom application: $app"
-                apt-get install -y "$app" || print_warning "Failed to install $app"
-                ;;
-        esac
-    done
-fi
+# Note: Required packages are installed by setup_ws.sh
 
 # --- Configure strongSwan (IPsec) ---
 print_message "Configuring strongSwan (IPsec)..."
