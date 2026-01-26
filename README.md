@@ -1,862 +1,564 @@
-# Cloudflare Zero Trust VPN Replacement
+# Secure Remote Access Gateway with WireGuard VPN
 
-Replace traditional VPN with **cloudflared + Egress Policies** - route client traffic through your VPS with Zero Trust security.
-
-## ⚠️ Important Limitation
-
-**Hostname-based routing only**: Cloudflare egress through tunnel is **domain-specific**, not true "all traffic" routing. You must add hostname routes for each domain you want to exit through your VPS. 
-
-- ✅ Good for: Routing specific sites/services through VPS (Google, YouTube, Netflix, etc.)
-- ❌ Not ideal for: True "route everything" VPN behavior on free tier
-- 💰 Enterprise alternative: Purchase dedicated egress IPs for true all-traffic routing
-
-## What You Get
-
-✅ **Hostname-based VPN** - Route specific domains through your VPS with your exit IP  
-✅ **SSH Access** - Secure SSH access via Cloudflare Tunnel  
-✅ **Single Client App** - Cloudflare One Agent on all platforms (Desktop + Mobile)  
-✅ **Zero Trust Security** - Identity-based access control + Gateway filtering  
-✅ **Custom Exit IP** - Traffic exits from your VPS IP for configured domains
+**Hybrid secure access solution combining WireGuard VPN with Cloudflare Zero Trust Access management.**
 
 ---
 
-## Architecture
+## Architecture Overview
 
-**Using cloudflared + Egress through Cloudflare Tunnel (Beta):**
+This setup provides two independent security layers:
+
 ```
-Remote WARP Clients (Anywhere)
-     │
-     │ (DNS + Network + HTTP traffic)
-     │
-     ▼
-Cloudflare Edge (Gateway filtering + DNS resolution)
-     │
-     │ (Encrypted Cloudflare Tunnel)
-     │
-     ▼
-VPS - cloudflared (VPS_PUBLIC_IP)
-     │
-     │ (Egress with VPS IP)
-     │
-     ▼
-Internet (traffic exits with VPS_PUBLIC_IP)
+┌─────────────────────────────────────────────────────────────┐
+│                    CLIENT DEVICES                            │
+│  ┌──────────────────────┐    ┌──────────────────────────┐  │
+│  │   WireGuard VPN      │    │  Cloudflare One Agent    │  │
+│  │  (All Traffic)       │    │  (SSH/VNC Access)        │  │
+│  └──────────┬───────────┘    └───────────┬──────────────┘  │
+└─────────────┼────────────────────────────┼─────────────────┘
+              │                            │
+              │ Direct VPS Connection      │ via Cloudflare Edge
+              │ (Port 51820/udp)           │ (Tunneled)
+              ▼                            ▼
+┌─────────────┴────────────────────────────┴─────────────────┐
+│                      VPS SERVER                              │
+│  ┌────────────────┐              ┌──────────────────────┐  │
+│  │  WireGuard     │              │  cloudflared         │  │
+│  │  (wg0)         │              │  (SSH/VNC Tunnel)    │  │
+│  │  10.8.0.1/24   │              │                      │  │
+│  └────────┬───────┘              └──────────────────────┘  │
+│           │                                                  │
+│           │ NAT/Masquerade                                  │
+│           ▼                                                  │
+│    ┌────────────┐    ┌─────────┐    ┌────────────┐        │
+│    │   VNC      │    │  Docker │    │  Desktop   │        │
+│    │  Servers   │    │         │    │  Apps      │        │
+│    └────────────┘    └─────────┘    └────────────┘        │
+└──────────────────────────────────────────────────────────────┘
+              │
+              │ All Traffic Exits
+              ▼
+           Internet (VPS_PUBLIC_IP)
 ```
 
-**How it works:**
-1. WARP client sends all traffic to Cloudflare Gateway
-2. Gateway resolves DNS queries with "initial resolved IPs" (100.80.x.x range)
-3. For domains with hostname routes, Gateway sends traffic down your Cloudflare Tunnel
-4. Your VPS receives traffic via cloudflared
-5. Traffic exits to internet using your VPS IP (VPS_PUBLIC_IP)
-6. Gateway logs and filters all traffic
+### What You Get
 
-**What you get:**
-- ✅ cloudflared tunnel on VPS for egress
-- ✅ Hostname-based routing (configure which domains exit through VPS)
-- ✅ NAT configured for internet egress
-- ✅ Exit IP = Your VPS IP (VPS_PUBLIC_IP)
-- ✅ Gateway filtering and logging
-- ✅ Secure SSH access through Cloudflare Access  
+✅ **WireGuard VPN** - True all-traffic VPN with your VPS as exit point  
+✅ **Cloudflare Access** - Identity-aware SSH/VNC access (Gmail + OTP)  
+✅ **Zero Trust Security** - Policy-based access control for management  
+✅ **Multiple VNC Users** - Individual desktop sessions per user  
+✅ **L2TP Fallback** - Optional VPN for devices without WireGuard support  
+✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
 
 ---
 
 ## Prerequisites
 
-- **VPS**: Ubuntu 24.04, Public IP: `VPS_PUBLIC_IP`
-- **Cloudflare Zero Trust**: Free tier (team: `noise-ztna`)
-- **User Emails**: Gmail addresses for authorized users
-- **WARP Client**: Required on all devices for traffic routing
-- **cloudflared**: Version 2025.7.0 or later (installed by setup script)
+- **VPS**: Ubuntu 24.04 with public IP
+- **Cloudflare Account**: Free tier (for Zero Trust Access)
+- **Email**: Gmail address for authentication
+- **Clients**: WireGuard client apps for VPN, Cloudflare One Agent for SSH/VNC
 
 ---
 
-## Part 1: Cloudflare Zero Trust Setup
+## Part 1: Cloudflare Zero Trust Setup (Dashboard Configuration)
 
-### 1.1 Configure Identity Provider
+### 1.1 Configure Identity Provider and Admin Policy
 
-Configure Gmail authentication with One-time PIN:
+Set up Gmail authentication with One-time PIN:
 
-1. Go to [Cloudflare One](https://one.dash.cloudflare.com/)
-2. Navigate to: **Integrations → Identity providers**
-3. Click **Add an identity provider**
+1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/)
+2. Navigate to: **Settings → Authentication**
+3. Under **Login methods**, click **Add new**
 4. Select **One-time PIN**
 5. Click **Save**
 
+**Create Admin Policy for Device Enrollment:**
+
+1. Go to: **Settings → WARP Client**
+2. Under **Device enrollment**, click **Manage**
+3. Click **Add a rule**
+4. Configure policy:
+   - **Rule name**: `Admin Access`
+   - **Rule action**: `Allow`
+   - **Selector**: `Emails`
+   - **Value**: `your-admin@gmail.com` (your email)
+5. Click **Save**
+
 ---
 
-### 1.2 Create Cloudflare Tunnel with cloudflared
+### 1.2 Create Cloudflare Tunnel for SSH/VNC Access
 
-This creates the tunnel that will be used for egress routing:
+**Important**: Create a regular **Cloudflare Tunnel** (cloudflared), NOT WARP Connector.
 
-1. Go to: **Networks → Connectors → Cloudflare Tunnels**
+1. Go to: **Networks → Tunnels**
 2. Click **Create a tunnel**
-3. Select **Cloudflared** (NOT WARP Connector)
-4. **Tunnel name**: `vps-egress` (or any name you prefer)
+3. Select **Cloudflared** as connector type
+4. **Tunnel name**: `vps-access` (or any name you prefer)
 5. Click **Save tunnel**
-6. Select **Linux** as the operating system
-7. You'll see installation commands - **copy the token** from the command
+6. **Select environment**: Linux
+7. You'll see installation commands - **copy the token** from the command:
    
-   Example command:
    ```bash
-   cloudflared service install <YOUR-TOKEN-HERE>
+   cloudflared service install eyJhIjoiN...  # ← Copy this token
    ```
    
    **Copy only the token part** (long string starting with `eyJ...`)
-8. **Save this token in your workstation.env** as `CLOUDFLARE_TUNNEL_TOKEN`
+8. **Save this token** - you'll add it to `workstation.env` as `CLOUDFLARE_TUNNEL_TOKEN`
 9. Click **Next**
-10. **Important**: Don't add any public hostname routes yet (we'll do this later)
-11. Click **Next** again to finish
+10. **Don't add public hostname yet** - we'll configure access applications separately
+11. Click **Save tunnel**
 
-**Result**: Cloudflare Tunnel created and ready for installation on VPS.
-
----
-
-### 1.2.1 Add Hostname Routes for Egress
-
-**Critical**: Configure which domains should exit through your VPS.
-
-⚠️ **Important Limitation**: Cloudflare egress routing is **hostname-based**, meaning you must specify individual domains. There is no wildcard (`*`) support for routing ALL traffic.
-
-**For VPN-like experience, add commonly used domains:**
-
-1. Go to: **Networks → Routes → Hostname routes**
-2. Click **Create hostname route** for each domain below
-3. For each route, configure:
-   - **Hostname**: (see list below)
-   - **Tunnel**: Select your `vps-egress` tunnel
-   - Click **Confirm** when prompted about WARP device profile
-4. Click **Create route**
-
-**Recommended domains to add** (add more as needed):
-```
-google.com
-*.google.com
-youtube.com
-*.youtube.com
-googleapis.com
-*.googleapis.com
-facebook.com
-*.facebook.com
-twitter.com
-*.twitter.com
-amazon.com
-*.amazon.com
-netflix.com
-*.netflix.com
-github.com
-*.github.com
-stackoverflow.com
-*.stackoverflow.com
-reddit.com
-*.reddit.com
-wikipedia.org
-*.wikipedia.org
-```
-
-**Add more domains based on your usage:**
-- For work: Your company domains
-- For streaming: Other video/music platforms
-- For gaming: Game server domains
-- For shopping: E-commerce sites you use
-
-**Note**: 
-- Without hostname routes, traffic goes directly through Cloudflare (not your VPS)
-- You can check Gateway DNS logs to see which domains you're accessing most
-- Subdomains with `*.` prefix will match all subdomains (e.g., `*.google.com` matches `mail.google.com`, `drive.google.com`, etc.)
-- You'll need to add hostname routes for any domain you want to exit through your VPS
+**Result**: Cloudflare Tunnel created and ready for SSH/VNC access.
 
 ---
 
-### 1.2.2 Add VPS Private Network (for SSH Access)
+### 1.3 Create Access Application for SSH
 
-1. Go back to: **Networks → Connectors → Cloudflare Tunnels**
-2. Find your `vps-egress` tunnel and click **Configure**
-3. Go to **Private Networks** tab
-4. Click **Add a private network**
-5. Enter: `10.0.0.0/24` (or your VPS internal network)
-6. Click **Save**
+1. Go to: **Access → Applications**
+2. Click **Add an application**
+3. Select **Self-hosted**
+4. Configure application:
+   - **Application name**: `VPS SSH Access`
+   - **Session duration**: `24 hours`
+   - **Application domain**: `ssh-vps` (subdomain)
+   - **Subdomain**: Choose your team domain
+   - **Path**: Leave empty
+5. Click **Next**
 
-**Why**: This allows SSH access to your VPS through the tunnel.
-
----
-
-### 1.3 Configure Device Enrollment/Connection Policy
-
-Allow authorized users to enroll/connect their devices:
-
-1. Go to: **Team & Resources → Devices → Management**
-2. Under **Device enrollment**, ensure these settings:
-   - **Device enrollment permissions**: Select **Manage**
-3. Under **Access policies**, click **Create new policy**
-4. Configure Policy:
-   - **Policy name**: `vps-warp`
-   - **Selector**: `Emails`
-   - **Value**: `user1@gmail.com`
-5. Click **Save**
-
-Note: include this policy in the **Device enrollment permissions**
-
----
-
-### 1.4 Configure Split Tunnels for Egress
-
-**Critical**: Configure split tunnels to allow initial resolved IPs while excluding only necessary private ranges.
-
-1. Go to: **Team & Resources → Devices → Device profiles**
-2. Find the **Default** profile and click **Configure**
-3. Scroll to **Split Tunnels** section
-4. Click **Manage**
-5. Ensure mode is: **Exclude IPs and domains**
-6. **IMPORTANT**: Gateway needs access to `100.64.0.0/10` (CGNAT range) for hostname-based egress.
-   
-   **If `100.64.0.0/10` is in your exclude list:**
-   - Click **Remove** to delete it
-   - Then add back ONLY the specific ranges you want to exclude:
-     ```
-     100.64.0.0/12    (excludes 100.64.x.x - 100.79.x.x)
-     100.81.0.0/16    (excludes 100.81.x.x)
-     100.82.0.0/15    (excludes 100.82.x.x - 100.83.x.x)
-     100.84.0.0/14    (excludes 100.84.x.x - 100.87.x.x)
-     100.88.0.0/13    (excludes 100.88.x.x - 100.95.x.x)
-     100.96.0.0/12    (excludes 100.96.x.x - 100.111.x.x)
-     100.112.0.0/12   (excludes 100.112.x.x - 100.127.x.x)
-     ```
-   - This excludes most of 100.64.0.0/10 BUT leaves `100.80.0.0/16` accessible
-   - Gateway uses `100.80.0.0/16` for "initial resolved IPs" required for egress
-
-7. Also exclude private networks (if not already present):
-   ```
-   10.0.0.0/8
-   172.16.0.0/12
-   192.168.0.0/16
-   ```
-
-8. Click **Save**
-
-**Why this matters**: 
-- Cloudflare Gateway uses `100.80.0.0/16` (within `100.64.0.0/10`) for "initial resolved IPs"
-- When you access a hostname route domain, Gateway resolves it to an IP in this range
-- WARP client routes this IP through the tunnel to your VPS
-- Without access to `100.80.0.0/16`, hostname-based egress will NOT work
-- When creating hostname routes, you'll see a warning if this is not configured correctly
-
----
-
-Configure SSH Access
-Since all traffic routes through Cloudflare WARP (including SSH), you need to configure Access for Infrastructure to securely access your server via SSH.
-
-### 1.5 Add a Target
-
-First, create a target that represents your SSH server:
-
-1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/)
-2. Navigate to: **Access controls → Targets**
-3. Select **Add a target**
-4. Configure Target:
-   - **Target hostname**: `vps-server` (or any friendly name)
-   - **IP addresses**: Enter `VPS_PUBLIC_IP` 
-   - The IP should appear in the dropdown (you added it in section 1.2.1)
-   - Select the IP and virtual network (likely `default`)
-5. Click **Add target**
-
-**Note**: If the IP doesn't appear in the dropdown, verify:
-- You completed section 1.2.1 (added IP to tunnel routes)
-- Go to **Networks → Routes** and confirm `VPS_PUBLIC_IP` is listed
-- Your WARP Connector tunnel is **Healthy**
-
-### 1.6 Create Infrastructure Application
-
-Now create an infrastructure application to secure the target:
-
-1. Go to: **Access controls → Applications**
-2. Select **Add an application**
-3. Select **Infrastructure**
-4. Configure Application:
-   - **Application name**: `SSH to VPS`
-5. Under **Target criteria**:
-   - **Target hostname**: Select `vps-server` (the target you created)
-   - **Protocol**: `SSH`
-   - **Port**: `22`
-6. Click **Next**
-7. **Add a policy**:
-   - **Policy name**: `Allow SSH Access`
+**Configure Policy:**
+   - **Policy name**: `Allow Admins`
    - **Action**: `Allow`
-   - **Configure rules**:
-     - **Selector**: `Emails`
-     - **Value**: `user1@gmail.com` (your email)
-   - **Connection context**:
-     - **SSH user**: Enter the UNIX usernames you want to allow (e.g., `root`)
-     - Optionally enable: **Allow users to log in as their email alias**
-8. Click **Add application**
+   - **Selector**: `Emails`
+   - **Value**: `your-admin@gmail.com`
+6. Click **Next**, then **Add application**
 
-### 1.7 Configure SSH Server
+**Add SSH Configuration:**
+1. Go back to **Networks → Tunnels**
+2. Click on your `vps-access` tunnel → **Configure**
+3. Go to **Public Hostname** tab
+4. Click **Add a public hostname**
+5. Configure:
+   - **Subdomain**: `ssh-vps`
+   - **Domain**: Your team domain
+   - **Service**: `SSH`
+   - **URL**: `localhost:22`
+6. Click **Save hostname**
 
-For enhanced security and SSH command logging, configure your VPS to trust Cloudflare's SSH Certificate Authority:
+---
 
-1. **Generate Cloudflare SSH CA:**
-   - Go to: **Access controls → Service credentials → SSH**
-   - Select **Add a certificate**
-   - Under **SSH with Access for Infrastructure**, select **Generate SSH CA**
-   - Copy the CA public key
+### 1.4 Create Access Applications for VNC (Optional)
 
-2. **On your VPS, save the public key:**
-   ```bash
-   # Create the CA public key file
-   sudo vim /etc/ssh/ca.pub
-   # Paste the public key from Cloudflare
-   ```
+Repeat the process for each VNC user/port:
 
-3. **Configure sshd to trust the CA:**
-   ```bash
-   # Edit sshd_config
-   sudo vim /etc/ssh/sshd_config
-   
-   # Add these lines at the top:
-   PubkeyAuthentication yes
-   TrustedUserCAKeys /etc/ssh/ca.pub
-   ```
+1. **Access → Applications → Add an application**
+2. Configure for each VNC port (e.g., 5910, 5911, 5912)
+3. Use same policy (Allow Admins with your email)
+4. Add public hostname in tunnel configuration for each VNC service
 
-4. **Reload SSH service:**
-   ```bash
-   sudo systemctl reload sshd
-   ```
+---
+
+### 1.5 Install Cloudflare One Agent (Optional - for SSH/VNC)
+
+**On your client device** (if you want to access SSH/VNC via Cloudflare Access):
+
+1. Download: [Cloudflare One Agent](https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/)
+2. Install and authenticate with your Gmail account
+3. Access SSH via: `ssh-vps.yourteam.cloudflareaccess.com`
+
 ---
 
 ## Part 2: VPS Server Setup
 
 ### 2.1 Prepare VPS Configuration
 
-SSH into your VPS and clone the repository, then edit `workstation.env` and configure:
+1. **SSH into your VPS**:
+   ```bash
+   ssh root@YOUR_VPS_IP
+   ```
+
+2. **Clone this repository**:
+   ```bash
+   git clone https://github.com/yourusername/setupWS.git
+   cd setupWS
+   ```
+
+3. **Edit `workstation.env`** configuration file:
+
 ```bash
-# Clone repository
-git clone https://github.com/HosseinBeheshti/setupWS.git
-cd setupWS
 vim workstation.env
 ```
 
-**Required configuration:**
-- `CLOUDFLARE_TUNNEL_TOKEN` - Token from Step 1.2 (starts with eyJ...)
-- `VPS_PUBLIC_IP` - Your VPS public IP (or leave empty for auto-detect)
-- `TUNNEL_NAME` - Your tunnel name (e.g., `vps-egress`)
+**Required Configuration:**
+
+```bash
+# Cloudflare Tunnel (for SSH/VNC Access)
+CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiN..."  # ← Paste token from Part 1.2
+TUNNEL_NAME="vps-access"                 # ← Match tunnel name from Part 1.2
+
+# VPS Information
+VPS_PUBLIC_IP="1.2.3.4"                  # ← Your VPS public IP
+
+# WireGuard VPN Configuration
+WG_SERVER_PORT="51820"
+WG_SERVER_ADDRESS="10.8.0.1/24"
+WG_CLIENT_DNS="1.1.1.1, 1.0.0.1"
+WG_CLIENT_COUNT=3                        # ← Number of VPN clients
+
+# VNC Users (configure at least one)
+VNCUSER1_USERNAME='alice'
+VNCUSER1_PASSWORD='strong_password_here'
+VNCUSER1_DISPLAY='1'
+VNCUSER1_RESOLUTION='1920x1080'
+VNCUSER1_PORT='5910'
+
+# Add more users as needed (VNCUSER2_, VNCUSER3_, etc.)
+VNC_USER_COUNT=3
+
+# VPN List (which VPN types to configure)
+VPN_LIST="l2tp wg"  # wg=WireGuard, l2tp=L2TP fallback
+
+# Optional: L2TP/IPsec Configuration (for fallback VPN)
+L2TP_SERVER_IP='your.l2tp.server.ip'
+L2TP_IPSEC_PSK='preshared_key'
+L2TP_USERNAME='username'
+L2TP_PASSWORD='password'
+```
+
+4. **Save and exit** (`:wq` in vim)
 
 ---
 
 ### 2.2 Run Automated Setup
 
-⚠️ **Note**: The script will install and configure cloudflared. Your SSH connection should remain stable.
+**Run the master setup script** (installs everything in correct order):
 
 ```bash
-sudo ./setup_ztna.sh
+sudo ./setup_ws.sh
 ```
 
-**What This Script Does**:
-1. ✅ Updates system packages
-2. ✅ Installs cloudflared (latest version)
-3. ✅ Configures cloudflared tunnel with your token
-4. ✅ Enables WARP routing for egress
-5. ✅ Configures NAT/masquerading for internet egress
-6. ✅ Enables IP forwarding
-7. ✅ Configures firewall (allows SSH on port 22)
-8. ✅ Starts cloudflared as a system service
-9. ✅ Verifies tunnel connectivity
+**What this does:**
+1. Installs all required packages (VNC, WireGuard, Docker, VS Code, Chrome, etc.)
+2. Configures virtual router for VPN traffic
+3. Sets up L2TP/IPsec (if enabled)
+4. Creates VNC servers for each user
+5. Installs and configures WireGuard VPN server
+6. Installs cloudflared and configures Cloudflare Access
 
-**Duration**: Approximately 5-10 minutes.
+**Duration**: 10-15 minutes depending on VPS speed.
 
-**After Setup Completes**:
-- cloudflared tunnel running and connected
-- NAT configured for egress routing
-- Firewall configured with proper rules
-- IP forwarding enabled
+**Monitor progress** - the script provides detailed status messages.
 
-**Verify Installation**:
-```bash
-# Check tunnel status
-sudo systemctl status cloudflared
-
-# Check tunnel connectivity
-sudo cloudflared tunnel info <TUNNEL-NAME>
-
-# Check IP forwarding
-sysctl net.ipv4.ip_forward
-
-# Check NAT rules
-sudo iptables -t nat -L -v -n | grep MASQUERADE
-
-# Check firewall rules
-sudo ufw status
-```
 ---
 
-## Part 3: Verification
+## Part 3: Client Setup
 
-### Understanding IP Routing with cloudflared Egress
+### 3.1 Connect via WireGuard VPN
 
-**How it works**: When you configure hostname routes, traffic flows:
+**Desktop Clients (Linux/Mac/Windows):**
+
+1. **Install WireGuard**:
+   - Linux: `sudo apt install wireguard`
+   - Mac/Windows: Download from [wireguard.com](https://www.wireguard.com/install/)
+
+2. **Copy client configuration from VPS**:
+   ```bash
+   scp root@YOUR_VPS_IP:/etc/wireguard/clients/client1.conf ~/
+   ```
+
+3. **Import configuration**:
+   - Linux/Mac: `sudo wg-quick up ~/client1.conf`
+   - Windows/Mac GUI: Import `client1.conf` file
+
+4. **Verify connection**:
+   ```bash
+   curl ifconfig.me
+   # Should show your VPS IP
+   ```
+
+**Mobile Clients (iOS/Android):**
+
+1. **Install WireGuard app** from App Store/Play Store
+2. **Generate QR code on VPS**:
+   ```bash
+   cat /etc/wireguard/clients/client1_qr.txt
+   ```
+3. **Scan QR code** in WireGuard app
+4. **Connect** and verify IP
+
+---
+
+### 3.2 Connect to VNC Desktop
+
+**Direct Connection (when NOT using Cloudflare Access):**
+
+1. **Install VNC client**:
+   - RealVNC Viewer, TigerVNC, Remmina, etc.
+
+2. **Connect**:
+   - Address: `YOUR_VPS_IP:5910` (for VNCUSER1)
+   - Password: (from workstation.env)
+
+**Via Cloudflare Access (if configured in Part 1.4):**
+
+1. Install Cloudflare One Agent
+2. Access via application URL from dashboard
+
+---
+
+### 3.3 Access via SSH
+
+**Direct SSH**:
+```bash
+ssh username@YOUR_VPS_IP
+```
+
+**Via Cloudflare Access**:
+```bash
+ssh ssh-vps.yourteam.cloudflareaccess.com
+```
+
+---
+
+### 3.4 L2TP/IPsec Fallback (Optional)
+
+For devices that can't run WireGuard:
 
 ```bash
+sudo ./run_vpn.sh
+```
+
+Configure L2TP client with credentials from `workstation.env`.
+
+---
+
+## Part 4: Verification
+
+### 4.1 Verify WireGuard VPN
+
+**On VPS:**
+```bash
+# Check WireGuard status
+sudo wg show
+
+# Should show:
+# interface: wg0
+#   public key: ...
+#   listening port: 51820
+#   peer: (client public key)
+#     allowed ips: 10.8.0.2/32
+#     latest handshake: X seconds ago
+```
+
+**On Client:**
+```bash
+# Check your public IP (should be VPS IP)
 curl ifconfig.me
-# Should show: VPS_PUBLIC_IP (your VPS IP)
+
+# Check VPN interface
+ip addr show  # Linux/Mac
+# Look for wg0 or utun interface with 10.8.0.x IP
 ```
 
-Your traffic flows:
-- Client → Cloudflare Edge → Gateway (DNS resolution with initial resolved IP)
-- Gateway → Your cloudflared tunnel → VPS
-- VPS → Internet (exits with VPS_PUBLIC_IP)
+---
 
-**To verify VPS routing is working:**
+### 4.2 Verify VNC Access
 
-1. **Check your exit IP:**
 ```bash
-# On client with WARP connected
-curl ifconfig.me
-# Should show: VPS_PUBLIC_IP (your VPS IP)
+# On VPS - check VNC services
+systemctl status vncserver-alice@1.service
 
-# If shows Cloudflare IP instead:
-# - Check hostname routes are configured (Step 1.2.1)
-# - Check split tunnels (100.64.0.0/10 should NOT be excluded)
-# - Check cloudflared tunnel is running on VPS
+# Should show: active (running)
 ```
 
-2. **On VPS, monitor tunnel traffic:**
+Connect via VNC client to verify desktop access.
+
+---
+
+### 4.3 Verify Cloudflare Tunnel
+
 ```bash
-# Watch cloudflared logs
-sudo journalctl -u cloudflared -f
+# On VPS
+sudo systemctl status cloudflared
 
-# Watch outbound traffic
-sudo tcpdump -i eth0 -n 'dst port 80 or dst port 443'
-# Should see traffic being forwarded from tunnel to internet
+# Should show: active (running)
+
+# Check tunnel info
+sudo cloudflared tunnel info vps-access
 ```
-
-3. **Check NAT is working:**
-```bash
-sudo iptables -t nat -L -v -n | grep MASQUERADE
-# Should show MASQUERADE rule with increasing packet counters
-```
-
-4. **Check Gateway DNS logs:**
-- Go to: **Logs → Gateway → DNS**
-- Look for queries with initial resolved IPs (100.80.x.x)
-- Verify domains are resolving correctly
-
-**Common issues:**
-
-- **Still seeing Cloudflare IP**: Hostname routes not configured or 100.64.0.0/10 excluded in split tunnels
-- **No traffic in tunnel logs**: Hostname routes missing or WARP not connected
-- **NAT not working**: Check iptables rules and IP forwarding enabled
-
-**To fix and route traffic through VPS (true VPN):****
-
-### For All Users
-
-**Check WARP connection:**
-```bash
-# On client device (if warp-cli is installed)
-warp-cli status
-# Expected: Status: Connected, Team: noise-ztna
-
-# Check routing table (Linux/macOS)
-ip route show | grep CloudflareWARP
-# or
-netstat -rn | grep CloudflareWARP
-```
-
-**Check DNS routing:**
-```bash
-nslookup cloudflare.com
-# Expected: DNS server should be 172.64.36.1 or 172.64.36.2 (Gateway resolver)
-```
-
-**Verify traffic flows through VPS:**
-```bash
-# On VPS, monitor traffic
-sudo tcpdump -i any -n | grep "your-client-warp-ip"
-```
-
-### Test SSH Access
-
-**Using standard SSH:**
-```bash
-# Connect to your VPS
-ssh root@VPS_PUBLIC_IP
-
-# First time, you'll authenticate via browser
-# Subsequent connections are seamless
-```
-
-**Check available targets:**
-```bash
-warp-cli target list
-# Should show your vps-server target with SSH on port 22
-```
-
-### Verify Gateway Filtering
-
-1. Go to: **Logs → Gateway → DNS**
-2. You should see DNS queries from `warp_connector@noise-ztna.cloudflareaccess.com`
-3. Go to: **Logs → Gateway → Network**
-4. You should see network traffic routed through VPS
 
 ---
 
 ## Troubleshooting
 
-### Understanding Cloudflare IP vs VPS IP
+### WireGuard Issues
 
-**Why you see Cloudflare IP (2a09:bac1:28a0:88::3f:77):**
-
-When you run `curl ifconfig.me` while connected to WARP, you see Cloudflare's CGNAT IP, not your VPS IP. This is **expected** because:
-
-1. Your traffic is encrypted and sent to Cloudflare Edge
-2. Cloudflare Edge routes to your VPS WARP Connector
-3. VPS forwards traffic back through Cloudflare's network to the internet
-4. External sites see Cloudflare's IP, not your VPS IP
-
-**Traffic Flow:**
-```
-Your Device → WARP Client → Cloudflare Edge → WARP Connector (VPS) → Cloudflare Network → Internet
-                                                                              ↑
-                                                              External sites see this IP (Cloudflare)
-```
-
-**This is how WARP Connector works by design**. Your VPS routes traffic, but the exit IP is managed by Cloudflare's infrastructure.
-
-### Cannot Access VPS via SSH
-
-**Symptom**: Cannot connect to SSH after running setup script or enabling WARP
-
-**Cause**: The script disconnects SSH when WARP activates, and you need alternative access.
-
-**Solution Options:**
-
-**Option 1: Direct SSH (if firewall allows)**
+**VPN not connecting:**
 ```bash
-# Try connecting directly via SSH
-ssh root@VPS_PUBLIC_IP
+# On VPS - check WireGuard service
+sudo systemctl status wg-quick@wg0
+sudo journalctl -u wg-quick@wg0 -n 50
 
-# If connection times out, firewall may be blocking
-# Use console access to check firewall
-```
+# Check firewall
+sudo ufw status
+# Port 51820/udp should be ALLOW
 
-**Option 2: Use VPS Console Access**
-- Access your VPS through hosting provider's console (KVM/VNC/Serial)
-- Log in and verify WARP is running:
-  ```bash
-  sudo warp-cli status
-  ```
-- Check firewall:
-  ```bash
-  sudo ufw status
-  # Should show: 22/tcp ALLOW
-  ```
-- If SSH port is blocked, re-allow it:
-  ```bash
-  sudo ufw allow 22/tcp
-  ```
-
-**Option 3: Access via Cloudflare (requires Access for Infrastructure setup)**
-
-1. **On your local machine, ensure WARP is connected:**
-   ```bash
-   warp-cli status
-   # Should show: Connected
-   ```
-
-2. **Check if you have access to the target:**
-   ```bash
-   warp-cli target list
-   # Should show your vps-server target
-   ```
-
-3. **Connect via SSH:**
-   ```bash
-   ssh root@VPS_PUBLIC_IP
-   # First time will require browser authentication
-   ```
-
-4. **If target doesn't appear:**
-   - Go to: **Access controls → Applications**
-   - Find your SSH application
-   - Verify your email is in the Allow policy
-   - Verify the UNIX username (e.g., `root`) is configured
-
-5. **Check tunnel health:**
-   - Go to: **Networks → Connectors → Cloudflare Tunnels**
-   - Verify your WARP Connector tunnel is **Healthy**
-
-6. **Try verbose SSH for debugging:**
-   ```bash
-   ssh -vvv root@VPS_PUBLIC_IP
-   ```
-
-**Prevention for future:**
-- Configure Access for Infrastructure BEFORE running setup script
-- Keep console/KVM access available
-- Or skip WARP activation in script and do it manually after testing
-
----
-
-### Traffic Not Routing Through VPS
-
-**Symptom**: `curl ifconfig.me` shows Cloudflare IP instead of your VPS IP
-
-**This is the MAIN issue** - WARP Connector doesn't route internet traffic through VPS by default!
-
-**Debug Steps:**
-
-1. **Check your exit IP:**
-```bash
-# On client device with WARP connected
-curl ifconfig.me
-# Should show: VPS_PUBLIC_IP (your VPS IP)
-# If shows Cloudflare IP (2a09:bac1:28a0:88::3f:77), traffic is NOT going through VPS!
-```
-
-2. **On VPS, verify NAT is configured:**
-```bash
-# Check if NAT rule exists
-sudo iptables -t nat -L -v -n | grep MASQUERADE
-# Should show MASQUERADE rule on your network interface (e.g., eth0)
-
-# Check if rule has packet counters increasing
-sudo iptables -t nat -L POSTROUTING -v -n
-# Look at 'pkts' and 'bytes' columns - should increase when client browses
-```
-
-3. **On VPS, check forwarding rules:**
-```bash
-# Check forward rules
-sudo iptables -L FORWARD -v -n
-# Should show ACCEPT rules for CloudflareWARP interface
-
-# Monitor live traffic forwarding
-sudo tcpdump -i any -n 'not port 22' | grep -E '(CloudflareWARP|eth0)'
-# Should see traffic coming from CloudflareWARP and going out eth0
-```
-
-4. **If NAT is missing, configure it manually:**
-```bash
-# Detect your network interface
-ip route | grep default
-# Look for interface name (eth0, ens3, enp0s3, etc.)
-
-# Configure NAT (replace eth0 with your interface)
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-sudo iptables -A FORWARD -i CloudflareWARP -o eth0 -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o CloudflareWARP -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-# Save rules
-sudo apt-get install iptables-persistent
-sudo netfilter-persistent save
-```
-
-5. **Check IP forwarding is enabled:**
-```bash
+# Check IP forwarding
 sysctl net.ipv4.ip_forward
-sysctl net.ipv6.conf.all.forwarding
-# Both should show = 1
-
-# If not enabled:
-sudo sysctl -w net.ipv4.ip_forward=1
-sudo sysctl -w net.ipv6.conf.all.forwarding=1
+# Should be: net.ipv4.ip_forward = 1
 ```
 
-6. **Verify Split Tunnels don't exclude all traffic:**
-- Go to: **Team & Resources → Devices → Device profiles → Default**
-- Check **Split Tunnels** section
-- Mode should be: **Exclude IPs and domains**
-- Should NOT have `0.0.0.0/0` in exclude list
-- Only private networks should be excluded (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-
-7. **Check WARP Connector tunnel routes:**
-- Go to: **Networks → Routes**
-- Should have `0.0.0.0/0` or specific public IPs routed through your WARP Connector tunnel
-- If not, add route: Click **Add a route** → Enter `0.0.0.0/1` and `128.0.0.0/1` → Select your tunnel
-
-8. **Restart WARP Connector:**
+**Traffic not routing:**
 ```bash
-sudo warp-cli disconnect
-sudo warp-cli connect
-sudo warp-cli status
-```
-
-9. **On client, reconnect WARP:**
-```bash
-warp-cli disconnect
-warp-cli connect
-warp-cli status
-```
-
-10. **Test again:**
-```bash
-curl ifconfig.me
-# Should now show: VPS_PUBLIC_IP
+# Check NAT rules
+sudo iptables -t nat -L -v -n | grep MASQUERADE
+# Should see rule for wg0 interface
 ```
 
 ---
 
-### WARP Connector Shows "Disconnected"
+### VNC Issues
 
-**Symptom**: `sudo warp-cli status` shows "Disconnected" or "Error"
-
-**Cause**: Registration issue or network connectivity problem.
-
-**Debug Steps:**
-
-1. **Re-register WARP Connector:**
+**Service not starting:**
 ```bash
-# Delete existing registration
-sudo warp-cli registration delete
+# Check service status
+systemctl status vncserver-username@display.service
 
-# Register again with tunnel token
-sudo warp-cli registration new --accept-tos
-sudo warp-cli registration token <YOUR-TOKEN-FROM-SECTION-1.2>
-sudo warp-cli connect
+# Check logs
+journalctl -xeu vncserver-username@display.service
+
+# Restart service
+sudo systemctl restart vncserver-username@display.service
 ```
 
-2. **Check network connectivity:**
+**Can't connect:**
 ```bash
-# Ping Cloudflare
-ping 1.1.1.1
+# Check firewall
+sudo ufw status
+# VNC port should be ALLOW
 
-# Check if WARP ports are accessible
-sudo ss -tulpn | grep warp-svc
-```
-
-3. **Check WARP logs:**
-```bash
-# View WARP service logs
-sudo journalctl -u warp-svc -f
-
-# Look for errors related to connection or registration
-```
-
-4. **Reinstall WARP:**
-```bash
-sudo apt-get remove --purge cloudflare-warp
-sudo apt-get autoremove
-sudo apt-get update
-sudo apt-get install cloudflare-warp
-
-# Re-register (section 2.3)
+# Check if VNC is listening
+sudo netstat -tulpn | grep 5910
 ```
 
 ---
 
-### Device Enrollment Fails
+### Cloudflare Access Issues
 
-**Symptom**: Cannot enroll device with Zero Trust
-
-**Cause**: Email not in allowed list or enrollment settings incorrect.
-
-**Debug Steps:**
-
-1. **Check enrollment policy:**
-- Go to: **Team & Resources → Devices → Device profiles → Management**
-- Verify your email domain/address is in enrollment rules
-
-2. **Check One-time PIN:**
-- Go to: **Integrations → Identity providers**
-- Verify **One-time PIN** is enabled
-
-3. **Try different authentication:**
-- Use incognito/private browser window
-- Clear browser cache
-- Try different email address
-
----
-
-### Gateway Logs Show No Traffic
-
-**Symptom**: No logs appearing in Gateway DNS/Network logs
-
-**Cause**: WARP Connector not properly routing traffic through Gateway.
-
-**Debug Steps:**
-
-1. **Verify Gateway settings:**
-- Go to: **Team & Resources → Devices → Device profiles → Default**
-- Ensure **Service mode** is: **Gateway with WARP** (NOT Gateway with DoH)
-
-2. **Check if traffic is being filtered:**
+**Tunnel not connecting:**
 ```bash
-# On client device
-dig @172.64.36.1 cloudflare.com
-# Should return results from Gateway DNS resolver
+# Check cloudflared status
+sudo systemctl status cloudflared
+sudo journalctl -u cloudflared -f
+
+# Verify credentials
+sudo cat /etc/cloudflared/credentials.json
+# Should contain valid JSON with AccountTag
+
+# Restart service
+sudo systemctl restart cloudflared
 ```
 
-3. **Test DNS resolution:**
-```bash
-nslookup cloudflare.com
-# Should use 172.64.36.1 or 172.64.36.2
-```
-
-4. **Check device profile assignment:**
-- Go to: **Team & Resources → Devices**
-- Find your device
-- Check which profile is applied (should be Default or custom WARP Connector profile)
+**Can't access SSH via Cloudflare:**
+- Verify application is created in Dashboard
+- Check DNS: `ssh-vps.yourteam.cloudflareaccess.com` should resolve
+- Verify access policy allows your email
+- Install Cloudflare One Agent on client device
 
 ---
 
 ## Monitoring
 
-**View enrolled devices:**
-- Go to: **Team & Resources → Devices**
-- See all devices connected to Zero Trust
+### Check VPN Connections
 
-**View WARP Connector status:**
-- Go to: **Networks → Connectors → Cloudflare Tunnels**
-- Check `vps-traffic-routing` tunnel health
-- View connected devices and traffic statistics
-
-**View Gateway logs:**
-- Go to: **Logs → Gateway → DNS**
-  - Monitor DNS queries from `warp_connector@noise-ztna.cloudflareaccess.com`
-- Go to: **Logs → Gateway → Network**
-  - Monitor network traffic routed through VPS
-- Go to: **Logs → Gateway → HTTP**
-  - Monitor web browsing activity
-
-**On VPS, monitor WARP Connector:**
 ```bash
-# Check WARP status
-sudo warp-cli status
+# WireGuard active connections
+sudo wg show
 
-# Check WARP statistics
-sudo warp-cli warp-stats
+# Current VPN routes
+ip route show table vpn_wg
+```
 
-# View system logs
-sudo journalctl -u warp-svc -f
+### Check Active VNC Sessions
+
+```bash
+# All VNC services
+systemctl list-units | grep vncserver
+
+# Specific user
+systemctl status vncserver-alice@1
+```
+
+### Monitor Cloudflare Tunnel
+
+```bash
+# Live logs
+sudo journalctl -u cloudflared -f
+
+# Recent activity
+sudo cloudflared tunnel info vps-access
 ```
 
 ---
 
-## Summary
+## Security Best Practices
 
-| Feature | Details |
-|---------|---------|
-| **Authentication** | Gmail + One-time PIN |
-| **SSH Access** | Direct via Access for Infrastructure (requires WARP client) |
-| **Traffic Routing** | ALL traffic routes through VPS via WARP Connector |
-| **Exit IP** | Cloudflare CGNAT IP (managed by Cloudflare) |
-| **Platforms** | Windows, macOS, Linux, Android, iOS |
+1. **Change default passwords** in `workstation.env` before setup
+2. **Use strong WireGuard keys** (auto-generated by setup script)
+3. **Restrict Cloudflare Access** policies to specific emails
+4. **Enable UFW firewall** (done automatically by setup script)
+5. **Regularly update** VPS packages: `sudo apt update && sudo apt upgrade`
+6. **Monitor logs** for suspicious activity
+7. **Backup WireGuard configs** from `/etc/wireguard/clients/`
 
-**Key Features:**
-- ✅ Complete VPN replacement with WARP Connector
-- ✅ System-wide traffic routing (DNS + Network + HTTP)
-- ✅ Secure SSH access via Access for Infrastructure (no cloudflared needed)
-- ✅ Gateway filtering and logging
-- ✅ Identity-based device enrollment
-- ✅ Works on all platforms without conflicts
+---
+
+## FAQ
+
+**Q: Can I use both WireGuard and Cloudflare Access simultaneously?**  
+A: Yes! They serve different purposes. Use WireGuard for VPN traffic, Cloudflare Access for SSH/VNC management.
+
+**Q: Which VPN should I use - WireGuard or L2TP?**  
+A: WireGuard is recommended (faster, more secure). L2TP is fallback for devices without WireGuard support.
+
+**Q: Do I need Cloudflare One Agent for VPN?**  
+A: No. WireGuard VPN connects directly to VPS. Cloudflare One Agent is only needed for accessing SSH/VNC via Cloudflare Access.
+
+**Q: Can I add more WireGuard clients later?**  
+A: Yes. Edit `WG_CLIENT_COUNT` in `workstation.env` and re-run `sudo ./setup_wg.sh`.
+
+**Q: How do I add more VNC users?**  
+A: Add `VNCUSER4_*` variables to `workstation.env`, increment `VNC_USER_COUNT`, and run `sudo ./setup_vnc.sh`.
+
+**Q: What ports are open on my VPS?**  
+A: 22 (SSH), 51820/udp (WireGuard), VNC ports (5910-591x), and optionally L2TP ports (500, 1701, 4500/udp).
 
 ---
 
 ## Next Steps
 
-1. ✅ **Part 1**: Create WARP Connector tunnel in Cloudflare dashboard
-2. ✅ **Part 2**: Install WARP Connector on VPS with setup script
-3. ✅ **Part 3**: Configure SSH access via Cloudflare Tunnel
-4. ✅ **Part 4**: Install Cloudflare One Agent on client devices
-5. ✅ **Part 5**: Verify traffic routes through VPS
-6. 📊 **Monitor**: Check Gateway logs and WARP Connector health
+1. ✅ Complete Cloudflare Zero Trust setup
+2. ✅ Run `sudo ./setup_ws.sh` on VPS
+3. ✅ Distribute WireGuard configs to clients
+4. ✅ Test VPN connection and verify exit IP
+5. ✅ Connect to VNC desktops
+6. ✅ (Optional) Configure Cloudflare Access for SSH/VNC
+7. ✅ Read security best practices above
 
-**Your WARP Connector VPN is ready!**
+---
+
+## Support
+
+- **WireGuard**: https://www.wireguard.com/
+- **Cloudflare Zero Trust**: https://developers.cloudflare.com/cloudflare-one/
+- **Ubuntu Server**: https://ubuntu.com/server/docs
+
+---
+
+## License
+
+See [LICENSE](LICENSE) file.
+
+---
+
+**Setup completed!** Enjoy your secure remote access gateway with WireGuard VPN and Cloudflare Zero Trust Access.
