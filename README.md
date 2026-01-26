@@ -8,7 +8,7 @@ Replace traditional VPN with **cloudflared + Egress Policies** - route client tr
 ✅ **SSH Access** - Secure SSH access via Cloudflare Tunnel  
 ✅ **Single Client App** - Cloudflare One Agent on all platforms (Desktop + Mobile)  
 ✅ **Zero Trust Security** - Identity-based access control + Gateway filtering  
-✅ **Custom Exit IP** - Traffic exits from your VPS IP (65.109.210.232)  
+✅ **Custom Exit IP** - Traffic exits from your VPS IP (VPS_PUBLIC_IP)  
 
 ---
 
@@ -26,12 +26,12 @@ Cloudflare Edge (Gateway filtering + DNS resolution)
      │ (Encrypted Cloudflare Tunnel)
      │
      ▼
-VPS - cloudflared (65.109.210.232)
+VPS - cloudflared (VPS_PUBLIC_IP)
      │
      │ (Egress with VPS IP)
      │
      ▼
-Internet (traffic exits with 65.109.210.232)
+Internet (traffic exits with VPS_PUBLIC_IP)
 ```
 
 **How it works:**
@@ -39,14 +39,14 @@ Internet (traffic exits with 65.109.210.232)
 2. Gateway resolves DNS queries with "initial resolved IPs" (100.80.x.x range)
 3. For domains with hostname routes, Gateway sends traffic down your Cloudflare Tunnel
 4. Your VPS receives traffic via cloudflared
-5. Traffic exits to internet using your VPS IP (65.109.210.232)
+5. Traffic exits to internet using your VPS IP (VPS_PUBLIC_IP)
 6. Gateway logs and filters all traffic
 
 **What you get:**
 - ✅ cloudflared tunnel on VPS for egress
 - ✅ Hostname-based routing (configure which domains exit through VPS)
 - ✅ NAT configured for internet egress
-- ✅ Exit IP = Your VPS IP (65.109.210.232)
+- ✅ Exit IP = Your VPS IP (VPS_PUBLIC_IP)
 - ✅ Gateway filtering and logging
 - ✅ Secure SSH access through Cloudflare Access  
 
@@ -54,7 +54,7 @@ Internet (traffic exits with 65.109.210.232)
 
 ## Prerequisites
 
-- **VPS**: Ubuntu 24.04, Public IP: `65.109.210.232`
+- **VPS**: Ubuntu 24.04, Public IP: `VPS_PUBLIC_IP`
 - **Cloudflare Zero Trust**: Free tier (team: `noise-ztna`)
 - **User Emails**: Gmail addresses for authorized users
 - **WARP Client**: Required on all devices for traffic routing
@@ -196,14 +196,14 @@ First, create a target that represents your SSH server:
 3. Select **Add a target**
 4. Configure Target:
    - **Target hostname**: `vps-server` (or any friendly name)
-   - **IP addresses**: Enter `65.109.210.232` 
+   - **IP addresses**: Enter `VPS_PUBLIC_IP` 
    - The IP should appear in the dropdown (you added it in section 1.2.1)
    - Select the IP and virtual network (likely `default`)
 5. Click **Add target**
 
 **Note**: If the IP doesn't appear in the dropdown, verify:
 - You completed section 1.2.1 (added IP to tunnel routes)
-- Go to **Networks → Routes** and confirm `65.109.210.232` is listed
+- Go to **Networks → Routes** and confirm `VPS_PUBLIC_IP` is listed
 - Your WARP Connector tunnel is **Healthy**
 
 ### 1.6 Create Infrastructure Application
@@ -337,7 +337,7 @@ Users can now connect to the server using standard SSH commands while connected 
 
 ```bash
 # Simply SSH to the server IP
-ssh root@65.109.210.232
+ssh root@VPS_PUBLIC_IP
 
 # Or use the target hostname if configured
 ssh root@vps-server
@@ -364,13 +364,13 @@ warp-cli target list
 
 ```bash
 curl ifconfig.me
-# Should show: 65.109.210.232 (your VPS IP)
+# Should show: VPS_PUBLIC_IP (your VPS IP)
 ```
 
 Your traffic flows:
 - Client → Cloudflare Edge → Gateway (DNS resolution with initial resolved IP)
 - Gateway → Your cloudflared tunnel → VPS
-- VPS → Internet (exits with 65.109.210.232)
+- VPS → Internet (exits with VPS_PUBLIC_IP)
 
 **To verify VPS routing is working:**
 
@@ -378,7 +378,7 @@ Your traffic flows:
 ```bash
 # On client with WARP connected
 curl ifconfig.me
-# Should show: 65.109.210.232 (your VPS IP)
+# Should show: VPS_PUBLIC_IP (your VPS IP)
 
 # If shows Cloudflare IP instead:
 # - Check hostname routes are configured (Step 1.2.1)
@@ -446,7 +446,7 @@ sudo tcpdump -i any -n | grep "your-client-warp-ip"
 **Using standard SSH:**
 ```bash
 # Connect to your VPS
-ssh root@65.109.210.232
+ssh root@VPS_PUBLIC_IP
 
 # First time, you'll authenticate via browser
 # Subsequent connections are seamless
@@ -500,7 +500,7 @@ Your Device → WARP Client → Cloudflare Edge → WARP Connector (VPS) → Clo
 **Option 1: Direct SSH (if firewall allows)**
 ```bash
 # Try connecting directly via SSH
-ssh root@65.109.210.232
+ssh root@VPS_PUBLIC_IP
 
 # If connection times out, firewall may be blocking
 # Use console access to check firewall
@@ -538,7 +538,7 @@ ssh root@65.109.210.232
 
 3. **Connect via SSH:**
    ```bash
-   ssh root@65.109.210.232
+   ssh root@VPS_PUBLIC_IP
    # First time will require browser authentication
    ```
 
@@ -554,7 +554,7 @@ ssh root@65.109.210.232
 
 6. **Try verbose SSH for debugging:**
    ```bash
-   ssh -vvv root@65.109.210.232
+   ssh -vvv root@VPS_PUBLIC_IP
    ```
 
 **Prevention for future:**
@@ -576,7 +576,7 @@ ssh root@65.109.210.232
 ```bash
 # On client device with WARP connected
 curl ifconfig.me
-# Should show: 65.109.210.232 (your VPS IP)
+# Should show: VPS_PUBLIC_IP (your VPS IP)
 # If shows Cloudflare IP (2a09:bac1:28a0:88::3f:77), traffic is NOT going through VPS!
 ```
 
@@ -658,7 +658,7 @@ warp-cli status
 10. **Test again:**
 ```bash
 curl ifconfig.me
-# Should now show: 65.109.210.232
+# Should now show: VPS_PUBLIC_IP
 ```
 
 ---
