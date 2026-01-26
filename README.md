@@ -13,6 +13,23 @@ Replace traditional VPN with **Cloudflare WARP Connector** - route ALL client tr
 
 ## Architecture
 
+⚠️ **IMPORTANT**: WARP Connector by itself does **NOT** route internet traffic through your VPS. It only provides access to private networks/services on the VPS.
+
+**Default WARP Connector behavior:**
+```
+Client Devices (Cloudflare One Agent)
+     │
+     │ (All traffic)
+     │
+     ▼
+Cloudflare Edge (Gateway filtering)
+     │
+     ├─→ Internet (Direct from Cloudflare - NOT through VPS)
+     │
+     └─→ VPS - WARP Connector (only for accessing VPS services like SSH)
+```
+
+**To use VPS as exit node (true VPN), you need additional configuration:**
 ```
 Client Devices (Cloudflare One Agent)
      │
@@ -21,21 +38,23 @@ Client Devices (Cloudflare One Agent)
      ▼
 Cloudflare Edge (Gateway filtering)
      │
-     │ (Encrypted WARP tunnel)
+     │ (Routes to VPS via WARP Connector)
      │
      ▼
-VPS - WARP Connector (65.109.210.232)
+VPS - WARP Connector + NAT/Routing (65.109.210.232)
      │
-     ├─→ Internet (ALL traffic: web, apps, games, DNS, etc.)
+     ├─→ Internet via VPS IP (requires NAT and routing rules)
      │
-     └─→ SSH Access via Cloudflare Tunnel (no public ports needed)
+     └─→ SSH Access via Cloudflare Access
 ```
 
-**All users get:**
-- **Complete traffic routing** - WARP Connector routes ALL client traffic through VPS (not just web)
-- **System-wide VPN** - DNS queries, web browsing, apps, games, P2P, streaming
+**What you need for true VPN functionality:**
+- ✅ WARP Connector installed on VPS
+- ✅ NAT (masquerading) configured on VPS
+- ✅ Routing rules to force traffic through VPS
+- ✅ Split tunnel configuration to route 0.0.0.0/0 through WARP
 - Gateway filtering on all protocols (DNS/Network/HTTP)
-- Secure SSH access through Cloudflare Tunnel  
+- Secure SSH access through Cloudflare Access  
 
 ---
 
@@ -235,8 +254,14 @@ vim workstation.env
 
 ### 2.2 Run Automated Setup
 
-The setup script performs complete VPS configuration automatically:
+⚠️ **CRITICAL WARNING**: Running this script **WILL DISCONNECT YOUR SSH SESSION** when WARP Connector activates!
 
+**Before running the script:**
+1. Ensure you have console access to your VPS (KVM/VNC) OR
+2. Have an alternative way to access the VPS OR
+3. Configure SSH Access for Infrastructure FIRST (see Part 1.5-1.7) so you can reconnect via Cloudflare
+
+**The script will:**
 ```bash
 sudo ./setup_ztna.sh
 ```
@@ -246,15 +271,20 @@ sudo ./setup_ztna.sh
 2. ✅ Installs Cloudflare WARP Connector
 3. ✅ Registers WARP Connector with your token
 4. ✅ Enables IP forwarding
-5. ✅ Configures firewall
-6. ✅ Verifies services are running
+5. ✅ Configures firewall (allows SSH on port 22)
+6. ⚠️ **Activates WARP Connector - THIS DISCONNECTS SSH**
+7. ✅ Verifies services are running (if you reconnect)
 
 **Duration**: Approximately 5-10 minutes.
 
-**After Setup Completes**:
-- WARP Connector registered and connected
-- Firewall configured with proper rules
-- IP forwarding enabled
+**After SSH Disconnects**:
+1. Wait 30 seconds for WARP Connector to fully activate
+2. **Option A**: Reconnect via regular SSH (if firewall allows):
+   ```bash
+   ssh root@65.109.210.232
+   ```
+3. **Option B**: Use console access (KVM/VNC) on your VPS hosting provider
+4. **Option C**: If you configured Access for Infrastructure, connect via Cloudflare (requires WARP client running on your machine)
 
 **Verify Installation**:
 ```bash
@@ -267,6 +297,29 @@ sysctl net.ipv4.ip_forward
 # Check firewall rules
 sudo ufw status
 ```
+
+### 2.3 Configure NAT for True VPN Functionality
+
+⚠️ **REQUIRED** if you want traffic to exit through your VPS IP (true VPN):
+
+```bash
+# Enable NAT/masquerading on VPS
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# Make persistent (Ubuntu/Debian)
+sudo apt-get install iptables-persistent
+sudo netfilter-persistent save
+
+# Or for other systems, add to /etc/rc.local:
+echo '#!/bin/bash' | sudo tee /etc/rc.local
+echo 'iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE' | sudo tee -a /etc/rc.local
+sudo chmod +x /etc/rc.local
+```
+
+**Replace `eth0` with your actual network interface** (check with `ip link` or `ifconfig`).
+
+**Without this NAT rule, traffic will NOT exit through your VPS!**
+
 ---
 
 
@@ -300,22 +353,43 @@ warp-cli target list
 
 ### Understanding IP Routing
 
-**Important**: When connected to WARP, your traffic routes through Cloudflare's network:
+**CRITICAL**: By default, WARP Connector does **NOT** route internet traffic through your VPS!
 
 ```bash
 curl ifconfig.me
 # Shows: 2a09:bac1:28a0:88::3f:77 (Cloudflare CGNAT IP)
+# This means traffic is NOT going through your VPS!
 ```
 
-This is **expected behavior**. Your traffic flows:
-- Client → Cloudflare Edge → WARP Connector on VPS → Internet
+**If you see Cloudflare's IP instead of your VPS IP (65.109.210.232), your traffic is:**
+- Client → Cloudflare Edge → Internet (DIRECTLY, bypassing VPS)
 
-The exit IP you see is Cloudflare's IP because:
-1. WARP encrypts traffic to Cloudflare Edge
-2. Cloudflare Edge routes to your VPS WARP Connector
-3. VPS routes traffic to internet through Cloudflare's network
+**NOT:**
+- Client → Cloudflare Edge → VPS → Internet
 
-**To verify VPS routing is working:**
+**To verify if VPS routing is working:**
+
+1. **Check your exit IP:**
+```bash
+curl ifconfig.me
+# Should show: 65.109.210.232 (your VPS IP)
+# If it shows Cloudflare IP, traffic is NOT going through VPS!
+```
+
+2. **On VPS, monitor outbound traffic:**
+```bash
+# Watch for outbound HTTP traffic on your WAN interface
+sudo tcpdump -i eth0 -n 'dst port 80 or dst port 443'
+# You should see traffic from Cloudflare IPs being forwarded out
+```
+
+3. **Check NAT is working:**
+```bash
+sudo iptables -t nat -L -v -n
+# Should show MASQUERADE rule with packet counters increasing
+```
+
+**To fix and route traffic through VPS (true VPN):**
 
 ### For All Users
 
@@ -393,34 +467,62 @@ Your Device → WARP Client → Cloudflare Edge → WARP Connector (VPS) → Clo
 
 ### Cannot Access VPS via SSH
 
-**Symptom**: Cannot connect to SSH after enabling WARP
+**Symptom**: Cannot connect to SSH after running setup script or enabling WARP
 
-**Cause**: Multiple possible causes - Access policy, WARP connection, or target configuration.
+**Cause**: The script disconnects SSH when WARP activates, and you need alternative access.
 
-**Solution**:
+**Solution Options:**
 
-1. **Check if you have access to the target:**
-   ```bash
-   warp-cli target list
-   # Should show your vps-server target
-   ```
+**Option 1: Direct SSH (if firewall allows)**
+```bash
+# Try connecting directly via SSH
+ssh root@65.109.210.232
 
-2. **Verify WARP is connected:**
+# If connection times out, firewall may be blocking
+# Use console access to check firewall
+```
+
+**Option 2: Use VPS Console Access**
+- Access your VPS through hosting provider's console (KVM/VNC/Serial)
+- Log in and verify WARP is running:
+  ```bash
+  sudo warp-cli status
+  ```
+- Check firewall:
+  ```bash
+  sudo ufw status
+  # Should show: 22/tcp ALLOW
+  ```
+- If SSH port is blocked, re-allow it:
+  ```bash
+  sudo ufw allow 22/tcp
+  ```
+
+**Option 3: Access via Cloudflare (requires Access for Infrastructure setup)**
+
+1. **On your local machine, ensure WARP is connected:**
    ```bash
    warp-cli status
    # Should show: Connected
    ```
 
-3. **Check Access policies:**
+2. **Check if you have access to the target:**
+   ```bash
+   warp-cli target list
+   # Should show your vps-server target
+   ```
+
+3. **Connect via SSH:**
+   ```bash
+   ssh root@65.109.210.232
+   # First time will require browser authentication
+   ```
+
+4. **If target doesn't appear:**
    - Go to: **Access controls → Applications**
    - Find your SSH application
    - Verify your email is in the Allow policy
    - Verify the UNIX username (e.g., `root`) is configured
-
-4. **Verify target configuration:**
-   - Go to: **Access controls → Targets**
-   - Verify `vps-server` has the correct IP: `65.109.210.232`
-   - Verify it's on the correct virtual network
 
 5. **Check tunnel health:**
    - Go to: **Networks → Connectors → Cloudflare Tunnels**
@@ -431,55 +533,108 @@ Your Device → WARP Client → Cloudflare Edge → WARP Connector (VPS) → Clo
    ssh -vvv root@65.109.210.232
    ```
 
+**Prevention for future:**
+- Configure Access for Infrastructure BEFORE running setup script
+- Keep console/KVM access available
+- Or skip WARP activation in script and do it manually after testing
+
 ---
 
 ### Traffic Not Routing Through VPS
 
-**Symptom**: Traffic not going through WARP at all
+**Symptom**: `curl ifconfig.me` shows Cloudflare IP instead of your VPS IP
+
+**This is the MAIN issue** - WARP Connector doesn't route internet traffic through VPS by default!
 
 **Debug Steps:**
 
-1. **On VPS, check WARP Connector status:**
+1. **Check your exit IP:**
 ```bash
-sudo warp-cli status
-# Expected: Status: Connected
-
-sudo warp-cli account
-# Expected: Shows your team name (noise-ztna)
+# On client device with WARP connected
+curl ifconfig.me
+# Should show: 65.109.210.232 (your VPS IP)
+# If shows Cloudflare IP (2a09:bac1:28a0:88::3f:77), traffic is NOT going through VPS!
 ```
 
-2. **Check WARP Connector in dashboard:**
-- Go to: **Networks → Connectors → Cloudflare Tunnels**
-- Find your tunnel `vps-traffic-routing`
-- Status should show: **Healthy** (green)
-- If **Down** or **Inactive**, WARP Connector is not connected
+2. **On VPS, verify NAT is configured:**
+```bash
+# Check if NAT rule exists
+sudo iptables -t nat -L -v -n | grep MASQUERADE
+# Should show MASQUERADE rule on your network interface (e.g., eth0)
 
-3. **Restart WARP Connector:**
+# Check if rule has packet counters increasing
+sudo iptables -t nat -L POSTROUTING -v -n
+# Look at 'pkts' and 'bytes' columns - should increase when client browses
+```
+
+3. **On VPS, check forwarding rules:**
+```bash
+# Check forward rules
+sudo iptables -L FORWARD -v -n
+# Should show ACCEPT rules for CloudflareWARP interface
+
+# Monitor live traffic forwarding
+sudo tcpdump -i any -n 'not port 22' | grep -E '(CloudflareWARP|eth0)'
+# Should see traffic coming from CloudflareWARP and going out eth0
+```
+
+4. **If NAT is missing, configure it manually:**
+```bash
+# Detect your network interface
+ip route | grep default
+# Look for interface name (eth0, ens3, enp0s3, etc.)
+
+# Configure NAT (replace eth0 with your interface)
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+sudo iptables -A FORWARD -i CloudflareWARP -o eth0 -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o CloudflareWARP -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Save rules
+sudo apt-get install iptables-persistent
+sudo netfilter-persistent save
+```
+
+5. **Check IP forwarding is enabled:**
+```bash
+sysctl net.ipv4.ip_forward
+sysctl net.ipv6.conf.all.forwarding
+# Both should show = 1
+
+# If not enabled:
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo sysctl -w net.ipv6.conf.all.forwarding=1
+```
+
+6. **Verify Split Tunnels don't exclude all traffic:**
+- Go to: **Team & Resources → Devices → Device profiles → Default**
+- Check **Split Tunnels** section
+- Mode should be: **Exclude IPs and domains**
+- Should NOT have `0.0.0.0/0` in exclude list
+- Only private networks should be excluded (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+
+7. **Check WARP Connector tunnel routes:**
+- Go to: **Networks → Routes**
+- Should have `0.0.0.0/0` or specific public IPs routed through your WARP Connector tunnel
+- If not, add route: Click **Add a route** → Enter `0.0.0.0/1` and `128.0.0.0/1` → Select your tunnel
+
+8. **Restart WARP Connector:**
 ```bash
 sudo warp-cli disconnect
 sudo warp-cli connect
 sudo warp-cli status
 ```
 
-4. **Check IP forwarding:**
+9. **On client, reconnect WARP:**
 ```bash
-sysctl net.ipv4.ip_forward
-sysctl net.ipv6.conf.all.forwarding
-# Both should show = 1
+warp-cli disconnect
+warp-cli connect
+warp-cli status
 ```
 
-5. **Check Gateway settings:**
-- Go to: **Team & Resources → Devices → Device profiles → Default**
-- Ensure **Service mode** is: **Gateway with WARP**
-- Ensure these are enabled:
-  - Allow all Cloudflare One traffic to reach enrolled devices
-  - Assign a unique IP address to each device
-
-6. **Check client WARP connection:**
+10. **Test again:**
 ```bash
-# On client device
-warp-cli status
-# Should show: Status: Connected, Team: noise-ztna
+curl ifconfig.me
+# Should now show: 65.109.210.232
 ```
 
 ---

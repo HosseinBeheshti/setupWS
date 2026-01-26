@@ -87,8 +87,18 @@ print_message "  ✓ Allowed SSH (port 22)"
 
 print_message "✓ Firewall configured"
 
+# Step 2.5: Detect Network Interface
+print_header "Step 2.5/4: Detecting Network Interface"
+DEFAULT_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -n 1)
+if [[ -z "$DEFAULT_INTERFACE" ]]; then
+    print_error "Could not detect default network interface"
+    print_error "Please manually configure NAT rules"
+    exit 1
+fi
+print_message "Detected default interface: $DEFAULT_INTERFACE"
+
 # Step 3: Install and Configure Cloudflare WARP Connector
-print_header "Step 3/3: Installing Cloudflare WARP Connector"
+print_header "Step 3/4: Installing Cloudflare WARP Connector"
 
 # 1. Setup pubkey, apt repo, and update/install WARP
 print_message "Adding Cloudflare repository..."
@@ -102,13 +112,45 @@ apt-get update && apt-get install cloudflare-warp
 # 2. Enable IP forwarding on the host
 print_message "Enabling IP forwarding..."
 sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv6.conf.all.forwarding=1
 
 # Make persistent
 if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
     echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
 fi
+if ! grep -q "net.ipv6.conf.all.forwarding=1" /etc/sysctl.conf; then
+    echo "net.ipv6.conf.all.forwarding = 1" >> /etc/sysctl.conf
+fi
 
-# 3. Run the WARP Connector with token
+# Step 4: Configure NAT for True VPN Functionality
+print_header "Step 4/5: Configuring NAT (Network Address Translation)"
+
+print_warning "⚠️  Configuring NAT to route traffic through VPS (true VPN mode)"
+print_message "This allows all client traffic to exit via your VPS IP"
+echo ""
+
+# Install iptables-persistent for saving rules
+print_message "Installing iptables-persistent..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent > /dev/null 2>&1
+
+# Configure NAT/masquerading
+print_message "Configuring NAT on interface: $DEFAULT_INTERFACE"
+iptables -t nat -A POSTROUTING -o "$DEFAULT_INTERFACE" -j MASQUERADE
+
+# Allow forwarding from WARP interface to internet
+print_message "Configuring forwarding rules..."
+iptables -A FORWARD -i CloudflareWARP -o "$DEFAULT_INTERFACE" -j ACCEPT
+iptables -A FORWARD -i "$DEFAULT_INTERFACE" -o CloudflareWARP -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Save rules
+print_message "Saving iptables rules..."
+netfilter-persistent save > /dev/null 2>&1
+
+print_message "✓ NAT configured successfully"
+print_message "  Exit IP for clients will be: $VPS_PUBLIC_IP"
+echo ""
+
+# Step 5: Run the WARP Connector with token
 print_warning "⚠️  WARNING: The next command will disconnect your SSH session!"
 print_warning "⚠️  This is expected behavior when WARP Connector activates."
 print_warning "⚠️  Wait 30 seconds, then reconnect via SSH to verify setup."
@@ -152,12 +194,19 @@ echo -e "  ✓ Firewall rules configured"
 echo ""
 
 echo -e "${CYAN}VPS Information:${NC}"
-echo -e "  IP Address: ${GREEN}$VPS_PUBLIC_IP${NC}"
-echo -e "  SSH Port:   ${GREEN}22${NC}"
+echo -e "  IP Address:        ${GREEN}$VPS_PUBLIC_IP${NC}"
+echo -e "  Network Interface: ${GREEN}$DEFAULT_INTERFACE${NC}"
+echo -e "  SSH Port:          ${GREEN}22${NC}"
 echo ""
 
 echo -e "${CYAN}Service Status:${NC}"
 echo -e "  WARP Connector: ${GREEN}$(warp-cli status 2>/dev/null | head -1 || echo 'Check with: sudo warp-cli status')${NC}"
+echo ""
+
+echo -e "${CYAN}NAT Configuration:${NC}"
+echo -e "  NAT/Masquerading: ${GREEN}Enabled on $DEFAULT_INTERFACE${NC}"
+echo -e "  Forwarding Rules: ${GREEN}Configured${NC}"
+echo -e "  Exit IP:          ${GREEN}$VPS_PUBLIC_IP${NC}"
 echo ""
 
 echo -e "${YELLOW}Next Steps:${NC}"
@@ -165,19 +214,23 @@ echo -e "1. ${BLUE}Verify WARP Connector:${NC}"
 echo -e "   ${CYAN}sudo warp-cli status${NC}"
 echo -e "   ${CYAN}sudo warp-cli account${NC}"
 echo ""
-echo -e "2. ${BLUE}Configure SSH Access (Part 3 in README.md):${NC}"
+echo -e "2. ${BLUE}Verify NAT is working:${NC}"
+echo -e "   ${CYAN}sudo iptables -t nat -L -v -n${NC}"
+echo -e "   (Check MASQUERADE rule on $DEFAULT_INTERFACE)"
+echo ""
+echo -e "3. ${BLUE}Configure Split Tunnels in Cloudflare Dashboard:${NC}"
+echo -e "   - Go to: Settings → WARP Client → Device profiles → Default"
+echo -e "   - Split Tunnels: Ensure mode is 'Exclude IPs and domains'"
+echo -e "   - Do NOT exclude 0.0.0.0/0 (all traffic should go through WARP)"
+echo ""
+echo -e "4. ${BLUE}On client device, test exit IP:${NC}"
+echo -e "   ${CYAN}curl ifconfig.me${NC}"
+echo -e "   Should show: ${GREEN}$VPS_PUBLIC_IP${NC}"
+echo -e "   If it shows Cloudflare IP, traffic is NOT routing through VPS!"
+echo ""
+echo -e "5. ${BLUE}Configure SSH Access (Part 3 in README.md):${NC}"
 echo -e "   - Create SSH application in Cloudflare dashboard"
-echo -e "   - Install cloudflared on your client"
-echo -e "   - Configure SSH to use Cloudflare Tunnel"
-echo ""
-echo -e "3. ${BLUE}Client Setup (README.md Part 4):${NC}"
-echo -e "   - Install Cloudflare One Agent"
-echo -e "   - Authenticate with your email"
-echo -e "   - All traffic will route through VPS"
-echo ""
-echo -e "4. ${BLUE}Verify Traffic Routing:${NC}"
-echo -e "   - Check WARP connection status"
-echo -e "   - Monitor Gateway logs in Cloudflare dashboard"
+echo -e "   - Or use direct SSH: ${CYAN}ssh root@$VPS_PUBLIC_IP${NC}"
 echo ""
 
 echo -e "${GREEN}Setup completed at $(date)${NC}"
