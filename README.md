@@ -329,33 +329,6 @@ sudo ufw status
 ```
 ---
 
-
-
-### 3.4 Connect via SSH
-
-Users can now connect to the server using standard SSH commands while connected to WARP:
-
-```bash
-# Simply SSH to the server IP
-ssh root@VPS_PUBLIC_IP
-
-# Or use the target hostname if configured
-ssh root@vps-server
-```
-
-**Requirements:**
-- WARP client must be running and connected on the user's device
-- User must be authenticated with their email (Gmail + One-time PIN)
-- User must have an Access policy allowing them to connect
-
-**Verify access:**
-```bash
-# Check which targets you have access to
-warp-cli target list
-```
-
----
-
 ## Part 3: Verification
 
 ### Understanding IP Routing with cloudflared Egress
