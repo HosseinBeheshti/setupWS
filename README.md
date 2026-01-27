@@ -70,12 +70,12 @@ TRAFFIC FLOWS:
 
 ### What You Get
 
-✅ **WireGuard VPN** - Independent VPN service for client devices (full tunnel)
-✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions (VPN_APPS)
-✅ **Cloudflare Access** - Identity-aware SSH/VNC access (Gmail + OTP)
-✅ **Zero Trust Security** - Policy-based access control for management
-✅ **Multiple VNC Users** - Individual desktop sessions per user
-✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
+- ✅ **WireGuard VPN** - Independent VPN service for client devices (full tunnel)
+- ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions (VPN_APPS)
+- ✅ **Cloudflare Access** - Identity-aware SSH/VNC access (Gmail + OTP)
+- ✅ **Zero Trust Security** - Policy-based access control for management
+- ✅ **Multiple VNC Users** - Individual desktop sessions per user
+- ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
 
 ---
 
