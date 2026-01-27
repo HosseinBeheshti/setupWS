@@ -108,70 +108,32 @@ print_message "✓ Firewall configured"
 # Step 2: Install cloudflared
 print_header "Step 2/4: Installing cloudflared (Cloudflare Tunnel)"
 
-# 1. Download and install cloudflared
-print_message "Downloading cloudflared..."
-cd /tmp
-wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+# 1. Add Cloudflare GPG key
+print_message "Adding Cloudflare GPG key..."
+mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
 
-if [[ ! -f cloudflared-linux-amd64.deb ]]; then
-    print_error "Failed to download cloudflared"
-    exit 1
-fi
+# 2. Add Cloudflare repository
+print_message "Adding Cloudflare repository..."
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | tee /etc/apt/sources.list.d/cloudflared.list
 
+# 3. Install cloudflared
 print_message "Installing cloudflared..."
-dpkg -i cloudflared-linux-amd64.deb
-rm cloudflared-linux-amd64.deb
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared
 
 # Verify installation
 CLOUDFLARED_VERSION=$(cloudflared --version 2>&1 | head -1)
 print_message "✓ cloudflared installed: $CLOUDFLARED_VERSION"
 
-# 2. Create cloudflared configuration directory
-print_message "Creating cloudflared configuration..."
-mkdir -p /etc/cloudflared
+# 4. Install cloudflared service with tunnel token
+print_message "Installing cloudflared service with tunnel token..."
+cloudflared service install "$CLOUDFLARE_TUNNEL_TOKEN"
 
-# 3. Create configuration file for SSH/VNC access (NO WARP routing)
-print_message "Configuring tunnel for SSH/VNC access..."
-cat > /etc/cloudflared/config.yml <<EOF
-tunnel: $TUNNEL_NAME
-credentials-file: /etc/cloudflared/credentials.json
-
-# Ingress rules for SSH and VNC access
-# These will be configured via Cloudflare Access Applications in the dashboard
-ingress:
-  - service: http_status:404
-EOF
-
-# 4. Create credentials file from token
-print_message "Setting up tunnel credentials..."
-echo "$CLOUDFLARE_TUNNEL_TOKEN" | base64 -d > /etc/cloudflared/credentials.json 2>/dev/null
-
-# If token is not base64 encoded, try using it directly
-if [[ ! -s /etc/cloudflared/credentials.json ]] || ! grep -q "AccountTag" /etc/cloudflared/credentials.json 2>/dev/null; then
-    # Token might be the full service install command or just the token
-    # Extract token if it's in the service install format
-    if [[ "$CLOUDFLARE_TUNNEL_TOKEN" =~ eyJ ]]; then
-        TOKEN_PART=$(echo "$CLOUDFLARE_TUNNEL_TOKEN" | grep -oP 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1)
-        if [[ -n "$TOKEN_PART" ]]; then
-            echo "$TOKEN_PART" | base64 -d > /etc/cloudflared/credentials.json 2>/dev/null
-        fi
-    fi
-fi
-
-# Validate credentials file
-if [[ ! -s /etc/cloudflared/credentials.json ]]; then
-    print_error "Failed to create credentials file"
-    print_error "Please check your CLOUDFLARE_TUNNEL_TOKEN in workstation.env"
-    exit 1
-fi
-
-print_message "✓ Tunnel configured for SSH/VNC access"
+print_message "✓ cloudflared service installed"
 
 # Step 3: Start cloudflared Service
 print_header "Step 3/4: Starting cloudflared Service"
-
-print_message "Installing cloudflared as system service..."
-cloudflared service install
 
 print_message "Starting cloudflared service..."
 systemctl start cloudflared
@@ -186,10 +148,16 @@ if systemctl is-active --quiet cloudflared; then
     
     # Try to get tunnel info
     print_message "Tunnel information:"
-    cloudflared tunnel info $TUNNEL_NAME 2>/dev/null || print_warning "  (Use 'cloudflared tunnel info $TUNNEL_NAME' to check tunnel details)"
+    cloudflared tunnel info 2>/dev/null || print_warning "  (Tunnel connected via token)"
 else
     print_error "cloudflared service failed to start!"
-    print_error "Check logs with: journalctl -u cloudflared -n 50"
+    print_error "Check logs with: journalctl -xeu cloudflared -n 50"
+    print_error "Check status with: systemctl status cloudflared"
+    
+    # Show recent logs
+    print_message "Recent logs:"
+    journalctl -u cloudflared -n 20 --no-pager || true
+    
     exit 1
 fi
 
