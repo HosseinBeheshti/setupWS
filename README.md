@@ -90,108 +90,179 @@ TRAFFIC FLOWS:
 
 ## Part 1: Cloudflare Zero Trust Setup (Dashboard Configuration)
 
-### 1.1 Configure Identity Provider and Admin Policy
+### 1.1 Configure Identity Provider
 
-Set up Gmail authentication with One-time PIN:
+Set up authentication method for your users:
 
-1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/)
+1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
 2. Navigate to: **Settings → Authentication**
-3. Under **Login methods**, click **Add new**
-4. Select **One-time PIN**
-5. Click **Save**
+3. Scroll to **Login methods** section
+4. Click **Add new** under Login methods
+5. Select **One-time PIN**
+6. Click **Save**
 
-**Create Admin Policy for Device Enrollment:**
-
-1. Go to: **Settings → WARP Client**
-2. Under **Device enrollment**, click **Manage**
-3. Click **Add a rule**
-4. Configure policy:
-   - **Rule name**: `Admin Access`
-   - **Rule action**: `Allow`
-   - **Selector**: `Emails`
-   - **Value**: `your-admin@gmail.com` (your email)
-5. Click **Save**
+**Result**: Users can now authenticate using email + OTP (one-time PIN sent to their email)
 
 ---
 
-### 1.2 Create Cloudflare Tunnel for SSH/VNC Access
+### 1.2 Configure Device Enrollment (Optional - for WARP clients)
 
-**Important**: Create a regular **Cloudflare Tunnel** (cloudflared), NOT WARP Connector.
+Set up device enrollment policy if you want to use WARP client:
+
+1. Go to: **Settings → WARP Client**
+2. Under **Device enrollment permissions**, click **Manage**
+3. Click **Add a rule**
+4. Configure the enrollment rule:
+   - **Rule name**: `Admin Enrollment`
+   - **Rule action**: `Allow`
+   - **Configure rules**: 
+     - Selector: `Emails`
+     - Value: `your-admin@gmail.com`
+5. Click **Save**
+
+**Note**: This is optional and only needed if you plan to use WARP client for device management. Not required for SSH/VNC access via Cloudflare Tunnel.
+
+---
+
+### 1.3 Create Cloudflare Tunnel
+
+Create a tunnel to connect your VPS to Cloudflare's network:
 
 1. Go to: **Networks → Tunnels**
 2. Click **Create a tunnel**
-3. Select **Cloudflared** as connector type
-4. **Tunnel name**: `vps-access` (or any name you prefer)
+3. Select **Cloudflared** connector
+4. Enter tunnel name: `vps-tunnel` (or any name you prefer)
 5. Click **Save tunnel**
-6. **Select environment**: Linux
-7. You'll see installation commands - **copy the token** from the command:
+6. On the next screen, select your environment: **Debian** (for Ubuntu)
+7. **Copy the tunnel token** from the installation command:
    
    ```bash
-   cloudflared service install eyJhIjoiN...  # ← Copy this token
+   sudo cloudflared service install eyJhIjoiN2E...
    ```
    
-   **Copy only the token part** (long string starting with `eyJ...`)
+   Copy only the token part (the long string starting with `eyJ`)
+   
 8. **Save this token** - you'll add it to `workstation.env` as `CLOUDFLARE_TUNNEL_TOKEN`
 9. Click **Next**
-10. **Don't add public hostname yet** - we'll configure access applications separately
-11. Click **Save tunnel**
+10. Skip the route configuration for now - click **Next** without adding routes
+11. On the overview page, your tunnel will show as "Inactive" until you install cloudflared on your VPS
 
-**Result**: Cloudflare Tunnel created and ready for SSH/VNC access.
+**Result**: Tunnel created and ready for configuration on VPS
 
 ---
 
-### 1.3 Create Access Application for SSH
+### 1.4 Create Access Application for SSH
+
+Configure SSH access through Cloudflare Access:
 
 1. Go to: **Access → Applications**
 2. Click **Add an application**
-3. Select **Self-hosted**
-4. Configure application:
-   - **Application name**: `VPS SSH Access`
-   - **Session duration**: `24 hours`
-   - **Application domain**: `ssh-vps` (subdomain)
-   - **Subdomain**: Choose your team domain
-   - **Path**: Leave empty
-5. Click **Next**
+3. Select **Private Network** (for SSH infrastructure access)
+4. Configure the application:
+   - **Application name**: `VPS SSH`
+   - Click **Next**
 
-**Configure Policy:**
-   - **Policy name**: `Allow Admins`
+5. Add an Access policy:
+   - **Policy name**: `Admin Access`
    - **Action**: `Allow`
-   - **Selector**: `Emails`
-   - **Value**: `your-admin@gmail.com`
-6. Click **Next**, then **Add application**
+   - Under **Configure rules**, add:
+     - Selector: `Emails`
+     - Value: `your-admin@gmail.com`
+   - Click **Next**
 
-**Add SSH Configuration:**
-1. Go back to **Networks → Tunnels**
-2. Click on your `vps-access` tunnel → **Configure**
-3. Go to **Public Hostname** tab
-4. Click **Add a public hostname**
-5. Configure:
-   - **Subdomain**: `ssh-vps`
-   - **Domain**: Your team domain
-   - **Service**: `SSH`
-   - **URL**: `localhost:22`
-6. Click **Save hostname**
+6. Configure the target:
+   - **IP/CIDR**: `YOUR_VPS_PUBLIC_IP` (e.g., `203.0.113.10`)
+   - **Protocol**: `SSH`
+   - **Port**: `22`
+   - Click **Add application**
+
+**Result**: SSH access is now protected by Cloudflare Access
 
 ---
 
-### 1.4 Create Access Applications for VNC (Optional)
+### 1.5 Add Private Network Routes for SSH/VNC
 
-Repeat the process for each VNC user/port:
+Configure the tunnel to route SSH and VNC traffic:
 
-1. **Access → Applications → Add an application**
-2. Configure for each VNC port (e.g., 5910, 5911, 5912)
-3. Use same policy (Allow Admins with your email)
-4. Add public hostname in tunnel configuration for each VNC service
+1. Go to: **Networks → Tunnels**
+2. Click on your tunnel name (`vps-tunnel`)
+3. Click **Configure** button
+4. Go to **Private Network** tab
+5. Click **Add a private network**
+6. Add route for your VPS:
+   - **CIDR**: `YOUR_VPS_PUBLIC_IP/32` (e.g., `203.0.113.10/32`)
+   - **Description**: `VPS SSH/VNC Access`
+   - Click **Save**
+
+**Result**: Cloudflare can now route traffic to your VPS for SSH and VNC
 
 ---
 
-### 1.5 Install Cloudflare One Agent (Optional - for SSH/VNC)
+### 1.6 Create Access Application for VNC (Optional)
 
-**On your client device** (if you want to access SSH/VNC via Cloudflare Access):
+If you want to access VNC through Cloudflare (recommended):
 
-1. Download: [Cloudflare One Agent](https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/)
-2. Install and authenticate with your Gmail account
-3. Access SSH via: `ssh-vps.yourteam.cloudflareaccess.com`
+1. Go to: **Access → Applications**
+2. Click **Add an application**
+3. Select **Private Network**
+4. Configure the application:
+   - **Application name**: `VPS VNC`
+   - Click **Next**
+
+5. Add an Access policy:
+   - **Policy name**: `Admin Access`
+   - **Action**: `Allow`
+   - Under **Configure rules**, add:
+     - Selector: `Emails`
+     - Value: `your-admin@gmail.com`
+   - Click **Next**
+
+6. Configure the target for each VNC user:
+   - **IP/CIDR**: `YOUR_VPS_PUBLIC_IP`
+   - **Protocol**: `TCP`
+   - **Port**: `5910` (for first VNC user)
+   - Click **Add target**
+   
+7. Repeat step 6 for additional VNC ports (5911, 5912, etc.)
+8. Click **Add application**
+
+**Result**: VNC access is now protected by Cloudflare Access
+
+---
+
+### 1.7 Install WARP Client on Your Device (Required for Access)
+
+To access SSH and VNC through Cloudflare, install the WARP client:
+
+**For Windows/Mac/Linux:**
+1. Download WARP client from: https://1.1.1.1/
+2. Install the client
+3. Open WARP and go to **Settings → Preferences → Account**
+4. Click **Login with Cloudflare Zero Trust**
+5. Enter your team name (found in Zero Trust dashboard)
+6. Authenticate with your email (you'll receive a one-time PIN)
+7. In WARP settings, set mode to **Gateway with WARP**
+
+**Result**: Your device can now access private networks and applications through Cloudflare
+
+---
+
+### 1.8 Test Cloudflare Access Setup (After VPS Setup)
+
+After completing VPS setup in Part 2, test your access:
+
+**Test SSH Access:**
+```bash
+# With WARP connected, SSH directly to VPS
+ssh root@YOUR_VPS_PUBLIC_IP
+```
+
+**Test VNC Access:**
+1. Connect WARP client
+2. Use VNC client to connect: `YOUR_VPS_PUBLIC_IP:5910`
+3. Enter VNC password from workstation.env
+
+**Note**: All traffic goes through Cloudflare's network - your connection is protected by Access policies
 
 ---
 
@@ -220,8 +291,8 @@ vim workstation.env
 
 ```bash
 # Cloudflare Tunnel (for SSH/VNC Access)
-CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiN..."  # ← Paste token from Part 1.2
-TUNNEL_NAME="vps-access"                 # ← Match tunnel name from Part 1.2
+CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiN..."  # ← Paste token from Part 1.3
+TUNNEL_NAME="vps-tunnel"                 # ← Match tunnel name from Part 1.3
 
 # VPS Information
 VPS_PUBLIC_IP="1.2.3.4"                  # ← Your VPS public IP
@@ -357,33 +428,42 @@ sudo ./manage_wg_client.sh remove old-device
 
 ### 3.3 Connect to VNC Desktop
 
-**Direct Connection (when NOT using Cloudflare Access):**
+**Via Cloudflare Private Network (Recommended):**
 
-1. **Install VNC client**:
-   - RealVNC Viewer, TigerVNC, Remmina, etc.
-
-2. **Connect**:
-   - Address: `YOUR_VPS_IP:5910` (for VNCUSER1)
+1. **Install and connect WARP client** (from Part 1.7)
+2. **Open VNC client** (RealVNC Viewer, TigerVNC, Remmina, etc.)
+3. **Connect**:
+   - Address: `YOUR_VPS_PUBLIC_IP:5910` (for VNCUSER1)
    - Password: (from workstation.env)
+4. Connection goes through Cloudflare's private network securely
 
-**Via Cloudflare Access (if configured in Part 1.4):**
+**Direct Connection (without Cloudflare):**
 
-1. Install Cloudflare One Agent
-2. Access via application URL from dashboard
+1. **Install VNC client**
+2. **Connect directly**:
+   - Address: `YOUR_VPS_IP:5910`
+   - Password: (from workstation.env)
+   - Note: This bypasses Cloudflare Access protection
 
 ---
 
 ### 3.4 Access via SSH
 
-**Direct SSH**:
-```bash
-ssh username@YOUR_VPS_IP
-```
+**Via Cloudflare Private Network (Recommended):**
 
-**Via Cloudflare Access**:
+1. **Connect WARP client** on your device
+2. **SSH directly to VPS**:
+   ```bash
+   ssh root@YOUR_VPS_PUBLIC_IP
+   ```
+   
+   Traffic is routed through Cloudflare's network and protected by Access policies
+
+**Direct SSH (without Cloudflare):**
 ```bash
-ssh ssh-vps.yourteam.cloudflareaccess.com
+ssh root@YOUR_VPS_IP
 ```
+Note: This bypasses Cloudflare Access protection
 
 ---
 
@@ -493,8 +573,14 @@ sudo systemctl status cloudflared
 # Should show: active (running)
 
 # Check tunnel info
-sudo cloudflared tunnel info vps-access
+sudo cloudflared tunnel info vps-tunnel
 ```
+
+**Test Access with WARP Client:**
+
+1. Connect WARP client on your device
+2. Verify you can SSH: `ssh root@YOUR_VPS_PUBLIC_IP`
+3. Verify VNC access through VNC client: `YOUR_VPS_PUBLIC_IP:5910`
 
 ---
 
@@ -560,19 +646,34 @@ sudo netstat -tulpn | grep 5910
 sudo systemctl status cloudflared
 sudo journalctl -u cloudflared -f
 
-# Verify credentials
-sudo cat /etc/cloudflared/credentials.json
-# Should contain valid JSON with AccountTag
-
 # Restart service
 sudo systemctl restart cloudflared
+
+# Check tunnel info
+sudo cloudflared tunnel info vps-tunnel
 ```
 
-**Can't access SSH via Cloudflare:**
-- Verify application is created in Dashboard
-- Check DNS: `ssh-vps.yourteam.cloudflareaccess.com` should resolve
-- Verify access policy allows your email
-- Install Cloudflare One Agent on client device
+**Can't access SSH/VNC via Cloudflare:**
+1. Verify WARP client is installed and connected
+2. Check WARP mode: Should be **Gateway with WARP**
+3. Verify you're authenticated (check WARP client settings)
+4. Check Access application is created in Dashboard (**Access → Applications**)
+5. Verify Access policy allows your email
+6. Check private network route exists (**Networks → Tunnels → Your Tunnel → Private Network**)
+7. Test with direct connection to isolate issue
+
+**WARP Client Issues:**
+```bash
+# Check WARP status (on client machine)
+warp-cli status
+
+# Check connection mode
+warp-cli settings
+
+# Reconnect
+warp-cli disconnect
+warp-cli connect
+```
 
 ---
 
@@ -604,9 +705,17 @@ systemctl status vncserver-alice@1
 # Live logs
 sudo journalctl -u cloudflared -f
 
-# Recent activity
-sudo cloudflared tunnel info vps-access
+# Check tunnel status
+sudo cloudflared tunnel info vps-tunnel
+
+# List all tunnels
+sudo cloudflared tunnel list
 ```
+
+**Check in Dashboard:**
+- Go to **Networks → Tunnels**
+- Your tunnel should show as "Healthy" with green status
+- Check **Traffic** tab for connection metrics
 
 ---
 
@@ -635,8 +744,17 @@ A: Use both for different purposes:
 - **WireGuard**: For your client devices (laptop, phone) - full VPN service
 - **L2TP**: In VNC sessions for routing specific apps (xrdp, remmina, etc.)
 
-**Q: Do I need Cloudflare One Agent for VPN?**  
-A: No. WireGuard VPN connects directly to VPS. Cloudflare One Agent is only needed for accessing SSH/VNC via Cloudflare Access.
+**Q: Do I need Cloudflare WARP for VPN?**  
+A: No. There are two separate things:
+- **WireGuard VPN**: Routes all your device traffic through VPS (shows VPS IP)
+- **Cloudflare WARP**: Only needed for accessing SSH/VNC through Cloudflare's private network
+- You can use WireGuard for general VPN, and WARP only when accessing your VPS services
+
+**Q: What's the difference between WireGuard and Cloudflare WARP?**  
+A: 
+- **WireGuard**: Your own VPN server - all traffic exits via your VPS IP
+- **WARP**: Cloudflare's client for accessing private networks/applications protected by Access
+- They serve different purposes and can be used together
 
 **Q: Can I add more WireGuard clients later?**  
 A: Yes. Use the management script:
@@ -667,12 +785,17 @@ A: 22 (SSH), 51820/udp (WireGuard), VNC ports (5910-591x), and optionally L2TP p
 
 ## Next Steps
 
-1. ✅ Complete Cloudflare Zero Trust setup
-2. ✅ Run `sudo ./setup_ws.sh` on VPS
-3. ✅ Distribute WireGuard configs to clients
-4. ✅ Test VPN connection and verify exit IP
-5. ✅ Connect to VNC desktops
-6. ✅ (Optional) Configure Cloudflare Access for SSH/VNC
+1. ✅ Complete Cloudflare Zero Trust setup (Part 1)
+   - Configure identity provider
+   - Create tunnel and get token
+   - Set up Access applications
+   - Add private network routes
+   - Install WARP client on your devices
+2. ✅ Run `sudo ./setup_ws.sh` on VPS (Part 2)
+3. ✅ Add WireGuard clients with `sudo ./manage_wg_client.sh` (Part 3)
+4. ✅ Test Cloudflare private network access (SSH/VNC)
+5. ✅ Test WireGuard VPN connection and verify exit IP
+6. ✅ Connect to VNC desktops
 7. ✅ Read security best practices above
 
 ---
