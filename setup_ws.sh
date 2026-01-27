@@ -263,7 +263,41 @@ print_message "✓ Cloudflare Zero Trust Access configured"
 echo ""
 
 # ============================================================
-# Step 6: Final Summary
+# Step 6: Configure Final Firewall Rules
+# ============================================================
+print_header "Step 6/6: Configuring Secure Firewall"
+
+print_message "Configuring firewall to block direct SSH/VNC access..."
+print_message "Access to SSH/VNC will ONLY be allowed through Cloudflare tunnel"
+
+# Reset UFW to defaults
+ufw --force reset
+
+# Deny all incoming by default
+ufw default deny incoming
+ufw default allow outgoing
+
+# Allow only WireGuard VPN
+ufw allow ${WG_SERVER_PORT:-51820}/udp comment 'WireGuard VPN'
+print_message "  ✓ WireGuard port ${WG_SERVER_PORT:-51820}/udp allowed"
+
+# Allow L2TP/IPsec VPN
+if [[ " $VPN_LIST " =~ " l2tp " ]]; then
+    ufw allow 500/udp comment 'IPsec'
+    ufw allow 1701/udp comment 'L2TP'
+    ufw allow 4500/udp comment 'IPsec NAT-T'
+    print_message "  ✓ L2TP/IPsec ports allowed"
+fi
+
+# Enable firewall
+ufw --force enable
+
+print_message "✓ Firewall configured - SSH/VNC only accessible via Cloudflare"
+print_warning "Direct SSH/VNC access is BLOCKED. Access only via Cloudflare tunnel."
+echo ""
+
+# ============================================================
+# Step 7: Final Summary
 # ============================================================
 print_header "Setup Complete!"
 

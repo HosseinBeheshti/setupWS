@@ -73,37 +73,11 @@ echo -e "${CYAN}Tunnel Name:${NC} $TUNNEL_NAME"
 echo -e "${CYAN}Tunnel Token:${NC} ${CLOUDFLARE_TUNNEL_TOKEN:0:20}...${CLOUDFLARE_TUNNEL_TOKEN: -10}"
 echo ""
 
-# Step 1: Configure Firewall (Allow VPN Ports for Direct Access)
-print_header "Step 1/4: Configuring Firewall"
+# Step 1: Initial Configuration
+print_header "Step 1/4: Initial Configuration"
 
-print_message "Configuring UFW firewall..."
-ufw --force enable > /dev/null
-
-# Allow SSH
-ufw allow 22/tcp comment 'SSH' > /dev/null
-print_message "  ✓ Allowed SSH (port 22)"
-
-# Allow WireGuard (direct access, bypass Cloudflare)
-ufw allow ${WG_SERVER_PORT:-51820}/udp comment 'WireGuard VPN' > /dev/null
-print_message "  ✓ Allowed WireGuard (port ${WG_SERVER_PORT:-51820}/udp)"
-
-# Allow L2TP/IPsec (direct access, bypass Cloudflare)
-ufw allow 500/udp comment 'IPsec' > /dev/null
-ufw allow 1701/udp comment 'L2TP' > /dev/null
-ufw allow 4500/udp comment 'IPsec NAT-T' > /dev/null
-print_message "  ✓ Allowed L2TP/IPsec (ports 500, 1701, 4500/udp)"
-
-# Allow VNC ports (for direct access if needed)
-for ((i=1; i<=VNC_USER_COUNT; i++)); do
-    port_var="VNCUSER${i}_PORT"
-    port="${!port_var}"
-    if [[ -n "$port" ]]; then
-        ufw allow ${port}/tcp comment "VNC User ${i}" > /dev/null
-        print_message "  ✓ Allowed VNC port $port/tcp"
-    fi
-done
-
-print_message "✓ Firewall configured"
+print_message "Firewall will be configured by setup_ws.sh after all components are installed"
+print_message "SSH/VNC will only be accessible via Cloudflare tunnel (not directly)"
 
 # Step 2: Install cloudflared
 print_header "Step 2/4: Installing cloudflared (Cloudflare Tunnel)"
@@ -174,32 +148,17 @@ echo -e "${GREEN}Cloudflare Zero Trust Access successfully configured!${NC}\n"
 
 echo -e "${YELLOW}Installed & Configured:${NC}"
 echo -e "  ✓ cloudflared tunnel (for SSH/VNC access)"
-echo -e "  ✓ Firewall rules (SSH, WireGuard, L2TP, VNC ports)"
-echo -e "  ✓ VPN ports open for direct access (bypass Cloudflare)"
-echo ""
-
-echo -e "${CYAN}VPS Information:${NC}"
-echo -e "  IP Address:   ${GREEN}$VPS_PUBLIC_IP${NC}"
-echo -e "  SSH Port:     ${GREEN}22${NC}"
-echo -e "  WireGuard:    ${GREEN}${WG_SERVER_PORT:-51820}/udp${NC}"
-echo -e "  L2TP/IPsec:   ${GREEN}500, 1701, 4500/udp${NC}"
-echo ""
-
-echo -e "${CYAN}VNC Ports:${NC}"
-for ((i=1; i<=VNC_USER_COUNT; i++)); do
-    port_var="VNCUSER${i}_PORT"
-    username_var="VNCUSER${i}_USERNAME"
-    port="${!port_var}"
-    username="${!username_var}"
-    if [[ -n "$port" ]]; then
-        echo -e "  ${username:-User $i}: ${GREEN}${port}/tcp${NC}"
-    fi
-done
+echo -e "  ✓ Firewall will be configured by setup_ws.sh"
 echo ""
 
 echo -e "${CYAN}Service Status:${NC}"
 echo -e "  cloudflared: ${GREEN}$(systemctl is-active cloudflared)${NC}"
 echo -e "  Tunnel Name: ${GREEN}$TUNNEL_NAME${NC}"
+echo ""
+
+echo -e "${YELLOW}Important Security Note:${NC}"
+echo -e "  ${RED}Direct SSH/VNC access will be BLOCKED by firewall${NC}"
+echo -e "  ${GREEN}All SSH/VNC access must go through Cloudflare tunnel${NC}"
 echo ""
 
 echo -e "${YELLOW}Next Steps - Complete Cloudflare Dashboard Configuration:${NC}"
@@ -220,16 +179,15 @@ echo ""
 echo -e "   ${YELLOW}Note:${NC} Token-based tunnels don't support 'cloudflared tunnel info' command"
 echo -e "   Check the Cloudflare dashboard (Networks → Tunnels) to verify connection"
 echo ""
-echo -e "4. ${BLUE}VPN Access (Direct, NOT via Cloudflare):${NC}"
+echo -e "4. ${BLUE}VPN Access (Direct, bypass Cloudflare):${NC}"
 echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
 echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC} in VNC sessions"
 echo ""
 
-echo -e "${CYAN}Important:${NC} VPN traffic (WireGuard/L2TP) bypasses Cloudflare and connects directly to VPS"
+echo -e "${CYAN}Important:${NC} Firewall will be configured by setup_ws.sh to block direct SSH/VNC"
 echo -e "${CYAN}           SSH/VNC access uses Cloudflare Access for identity-aware security${NC}"
 echo ""
 
-echo -e "${GREEN}Setup completed at $(date)${NC}"
-echo -e "${YELLOW}Read the complete guide in README.md${NC}"
+echo -e "${GREEN}Cloudflare tunnel setup completed at $(date)${NC}"
 
 exit 0

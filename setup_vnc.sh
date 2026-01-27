@@ -120,10 +120,6 @@ EOF
         echo "journalctl -xeu vncserver-$USERNAME@$DISPLAY_NUM.service"
         exit 1
     fi
-
-    # 5. Configure firewall
-    ufw allow "$PORT/tcp" comment "VNC for $USERNAME"
-    print_message "Firewall rule added for port $PORT."
 }
 
 # --- Main Script ---
@@ -131,12 +127,7 @@ EOF
 print_message "=== Starting VNC Server Setup ==="
 
 # Note: Required packages are installed by setup_ws.sh
-
-# Setup Firewall
-print_message "Configuring basic firewall rules..."
-ufw allow 22/tcp comment "SSH"
-ufw --force enable
-print_message "Firewall is active."
+# Note: Firewall rules are configured by setup_ws.sh
 
 # Parse VNC users and setup each user
 print_message "Setting up VNC users from configuration..."

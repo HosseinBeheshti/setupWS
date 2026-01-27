@@ -241,20 +241,27 @@ If you want to access VNC through Cloudflare (recommended):
 
 ---
 
-### 1.7 Install WARP Client on Your Device (Required for Access)
+### 1.7 Install Cloudflare One Agent on Your Device (Required for Access)
 
-To access SSH and VNC through Cloudflare, install the WARP client:
+To access SSH and VNC through Cloudflare, install the Cloudflare One Agent:
 
-**For Windows/Mac/Linux:**
-1. Download WARP client from: https://1.1.1.1/
-2. Install the client
-3. Open WARP and go to **Settings → Preferences → Account**
+**Download Links:**
+- **Windows**: https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/warp/download-warp/#windows
+- **macOS**: https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/warp/download-warp/#macos
+- **Linux**: https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/warp/download-warp/#linux
+- **iOS**: https://apps.apple.com/app/cloudflare-one-agent/id6443476492
+- **Android**: https://play.google.com/store/apps/details?id=com.cloudflare.cloudflareoneagent
+
+**Setup Instructions:**
+1. Download and install Cloudflare One Agent for your platform
+2. Open the app and click **Settings** (gear icon)
+3. Click **Preferences → Account**
 4. Click **Login with Cloudflare Zero Trust**
-5. Enter your team name (found in Zero Trust dashboard under Settings → Custom Pages)
+5. Enter your team name (found in Zero Trust dashboard under **Settings → Custom Pages**)
 6. Authenticate with your email (you'll receive a one-time PIN)
-7. In WARP settings, set mode to **Gateway with WARP**
+7. Set connection mode to **Gateway with WARP**
 
-**Result**: Your device can now access applications through Cloudflare
+**Result**: Your device can now access SSH/VNC applications through Cloudflare's secure tunnel
 
 ---
 
@@ -264,17 +271,19 @@ After completing VPS setup in Part 2, test your access:
 
 **Test SSH Access:**
 ```bash
-# With WARP connected, use cloudflared access ssh command
+# With Cloudflare One Agent connected, use cloudflared access ssh command
 cloudflared access ssh --hostname ssh-vps.yourteam.cloudflareaccess.com --url localhost:2222
 ```
 
 Or configure your SSH client to use the Cloudflare tunnel.
 
 **Test VNC Access:**
-1. Connect WARP client
+1. Connect Cloudflare One Agent
 2. Open browser and go to: `https://vnc1-vps.yourteam.cloudflareaccess.com`
 3. Authenticate with your email
 4. Access VNC through browser or VNC client via the authenticated tunnel
+
+**Important**: Direct SSH/VNC access to VPS IP is blocked by firewall. Access is ONLY through Cloudflare tunnel.
 
 **Note**: Replace `yourteam` with your actual Cloudflare Zero Trust team name
 
@@ -442,9 +451,9 @@ sudo ./manage_wg_client.sh remove old-device
 
 ### 3.3 Connect to VNC Desktop
 
-**Via Cloudflare Access (Recommended):**
+**Via Cloudflare Access (Required):**
 
-1. **Install and connect WARP client** (from Part 1.7)
+1. **Install and connect Cloudflare One Agent** (from Part 1.7)
 2. **Access via browser**:
    - Open browser: `https://vnc1-vps.yourteam.cloudflareaccess.com`
    - Authenticate with your email (one-time PIN)
@@ -459,21 +468,17 @@ cloudflared access tcp --hostname vnc1-vps.yourteam.cloudflareaccess.com --url l
 # In another terminal, connect VNC client to localhost:5900
 ```
 
-**Direct Connection (without Cloudflare):**
+**Direct Connection:**
 
-1. **Install VNC client**
-2. **Connect directly**:
-   - Address: `YOUR_VPS_IP:5910`
-   - Password: (from workstation.env)
-   - Note: This bypasses Cloudflare Access protection
+**Not Available** - Direct VNC access is blocked by firewall for security. You must use Cloudflare Access.
 
 ---
 
 ### 3.4 Access via SSH
 
-**Via Cloudflare Access (Recommended):**
+**Via Cloudflare Access (Required):**
 
-1. **Connect WARP client** on your device
+1. **Connect Cloudflare One Agent** on your device
 2. **SSH via cloudflared**:
    ```bash
    cloudflared access ssh --hostname ssh-vps.yourteam.cloudflareaccess.com
@@ -488,11 +493,9 @@ Host vps-ssh
 
 Then connect with: `ssh vps-ssh`
 
-**Direct SSH (without Cloudflare):**
-```bash
-ssh root@YOUR_VPS_IP
-```
-Note: This bypasses Cloudflare Access protection
+**Direct SSH:**
+
+**Not Available** - Direct SSH access is blocked by firewall for security. You must use Cloudflare Access.
 
 ---
 
@@ -610,12 +613,14 @@ sudo journalctl -u cloudflared -n 20
 - Check service status with `systemctl status cloudflared`
 - Verify in Cloudflare dashboard: **Networks → Tunnels** (should show "Healthy" status)
 
-**Test Access with WARP Client:**
+**Test Access with Cloudflare One Agent:**
 
-1. Connect WARP client on your device
+1. Connect Cloudflare One Agent on your device
 2. Test SSH: `cloudflared access ssh --hostname ssh-vps.yourteam.cloudflareaccess.com`
 3. Test VNC: Open browser to `https://vnc1-vps.yourteam.cloudflareaccess.com`
 4. Verify authentication works (you should receive one-time PIN)
+
+**Important**: Direct SSH/VNC to VPS IP is blocked. All access must go through Cloudflare.
 
 **Note**: Replace `yourteam` with your actual Cloudflare Zero Trust team name
 
@@ -691,18 +696,18 @@ sudo cloudflared tunnel info vps-tunnel
 ```
 
 **Can't access SSH/VNC via Cloudflare:**
-1. Verify WARP client is installed and connected
-2. Check WARP mode: Should be **Gateway with WARP**
-3. Verify you're authenticated (check WARP client settings)
+1. Verify Cloudflare One Agent is installed and connected
+2. Check connection mode: Should be **Gateway with WARP**
+3. Verify you're authenticated (check Cloudflare One Agent settings)
 4. Check Access applications exist in Dashboard (**Access → Applications**)
 5. Verify your Admin Policy allows your email
 6. Check public hostname routes exist (**Networks → Tunnels → Configure → Public Hostname**)
 7. Test authentication: Visit `https://yourteam.cloudflareaccess.com` to verify you can authenticate
 8. Check tunnel is "Healthy" in dashboard (**Networks → Tunnels**)
 
-**WARP Client Issues:**
+**Cloudflare One Agent Issues:**
 ```bash
-# Check WARP status (on client machine)
+# Check agent status (on client machine)
 warp-cli status
 
 # Check connection mode
@@ -712,6 +717,9 @@ warp-cli settings
 warp-cli disconnect
 warp-cli connect
 ```
+
+**Direct SSH/VNC not working:**
+This is expected and by design. Direct access to SSH (port 22) and VNC ports is blocked by the VPS firewall. All SSH/VNC access must go through Cloudflare tunnel for security.
 
 **cloudflared Access Tool Issues:**
 ```bash
@@ -793,17 +801,25 @@ A: Use both for different purposes:
 - **WireGuard**: For your client devices (laptop, phone) - full VPN service
 - **L2TP**: In VNC sessions for routing specific apps (xrdp, remmina, etc.)
 
-**Q: Do I need Cloudflare WARP for VPN?**  
+**Q: Do I need Cloudflare One Agent for VPN?**  
 A: No. There are two separate things:
 - **WireGuard VPN**: Routes all your device traffic through VPS (shows VPS IP)
-- **Cloudflare WARP + Access**: Only needed for accessing SSH/VNC through Cloudflare's authenticated applications
-- You can use WireGuard for general VPN, and Cloudflare Access only when accessing your VPS services
+- **Cloudflare One Agent**: Only needed for accessing SSH/VNC through Cloudflare's authenticated tunnel
+- You can use WireGuard for general VPN, and Cloudflare One Agent only when accessing your VPS management services
 
-**Q: What's the difference between WireGuard and Cloudflare WARP?**  
+**Q: What's the difference between WireGuard and Cloudflare One Agent?**  
 A: 
 - **WireGuard**: Your own VPN server - all traffic exits via your VPS IP
-- **WARP + Access**: Cloudflare's client for accessing self-hosted applications protected by Access policies
+- **Cloudflare One Agent**: Cloudflare's client for accessing self-hosted applications protected by Zero Trust Access policies
 - They serve different purposes and can be used together
+
+**Q: Why can't I SSH/VNC directly to my VPS IP?**  
+A: Direct SSH/VNC access is blocked by firewall for security. All SSH/VNC access must go through Cloudflare tunnel, which provides:
+- Identity verification (email + OTP)
+- Access policies enforcement
+- Traffic encryption and logging
+- Protection against brute-force attacks
+WireGuard and L2TP VPN ports remain open for their intended purposes.
 
 **Q: How do I access my VPS through Cloudflare?**  
 A: 
