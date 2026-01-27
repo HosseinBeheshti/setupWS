@@ -33,7 +33,7 @@ NC='\033[0m' # No Color
 print_message() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-print_header() { echo -e "\n${BLUE}========================================${NC}"; echo -e "${BLUE}$1${NC}"; echo -e "${BLUE}========================================${NC}\n"; }
+print_header() { echo -e "\n${BLUE}======================================================${NC}"; echo -e "${BLUE}$1${NC}"; echo -e "${BLUE}======================================================${NC}\n"; }
 
 # --- Check if running as root ---
 if [[ $EUID -ne 0 ]]; then

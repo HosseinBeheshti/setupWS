@@ -140,7 +140,7 @@ Note: include this policy in the **Device enrollment permissions**
    **Copy only the token part** (long string starting with `eyJ...`)
 8. **Save this token** - you'll add it to `workstation.env` as `CLOUDFLARE_TUNNEL_TOKEN`
 9. Click **Next**
-10. **Important**: Add any public hostname routes then delete it(we'll add applications later)
+10. **Important**: Add any public hostname routes then delete it (we'll add applications later)
 11. Click **Next** again to finish
 **Result**: Tunnel created and ready for configuration on VPS
 
@@ -179,11 +179,11 @@ Configure SSH access through Cloudflare Access:
 
 Now connect your tunnel to the applications you created:
 
-1. Go to: **Networks → Tunnels**
+1. Go to: **Networks → Connectors**
 2. Click on your tunnel name (`vps-tunnel`)
 3. Click **Configure**
-4. Go to **Public Hostname** tab
-5. Click **Add a public hostname**
+4. Go to **Published application routes** tab
+5. Click **Add a published application route**
 
 **For SSH Application:**
    - **Subdomain**: `ssh-vps` (must match the subdomain from step 1.4)
@@ -208,7 +208,7 @@ Now connect your tunnel to the applications you created:
 
 ---
 
-### 1.6 Create Access Application for VNC (Optional)
+### 1.6 Create Access Application for VNC
 
 If you want to access VNC through Cloudflare (recommended):
 
@@ -291,7 +291,7 @@ Or configure your SSH client to use the Cloudflare tunnel.
 
 2. **Clone this repository**:
    ```bash
-   git clone https://github.com/yourusername/setupWS.git
+   git clone https://github.com/HosseinBeheshti/setupWS.git
    cd setupWS
    ```
 
