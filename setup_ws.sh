@@ -111,7 +111,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     strongswan \
     xl2tpd \
     network-manager-l2tp \
-    netcat-openbsd
+    netcat-openbsd \
+    iptables-persistent
 
 # VPN Apps (from setup_l2tp.sh VPN_APPS)
 if [[ -n "$VPN_APPS" ]]; then
