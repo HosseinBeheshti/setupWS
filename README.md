@@ -21,31 +21,51 @@ This setup provides two VPN services and zero-trust access control:
 │  └──────────┬───────────┘    └───────────┬──────────────┘  │
 └─────────────┼────────────────────────────┼─────────────────┘
               │                            │
-              │ Direct VPS Connection      │ via Cloudflare Edge
-              │ (Port 51820/udp)           │ (Tunneled)
+              │ Encrypted Tunnel           │ via Cloudflare Edge Network
+              │ Port 51820/udp             │ (Zero Trust Access)
+              │                            │
               ▼                            ▼
-┌─────────────┴────────────────────────────┴─────────────────┐
-│                      VPS SERVER                            │
-│  ┌────────────────┐              ┌──────────────────────┐  │
-│  │  WireGuard     │              │  cloudflared         │  │
-│  │  (wg0)         │              │  (SSH/VNC Tunnel)    │  │
-│  │  10.8.0.1/24   │              │                      │  │
-│  └────────┬───────┘              └──────────────────────┘  │
-│           │                                                │
-│           │ NAT/Masquerade                                 │
-│           ▼                                                │
-│    ┌────────────┐    ┌─────────┐    ┌────────────┐         │
-│    │   VNC      │    │  Docker │    │  Desktop   │         │
-│    │  Sessions  │    │         │    │  Apps      │         │
-│    │            │    └─────────┘    └────────────┘         │
-│    │ L2TP for   │                                          │
-│    │ VPN_APPS   │  (run ./run_vpn.sh in VNC)               │
-│    └────────────┘                                          │
-└────────────────────────────────────────────────────────────┘
-              │
-              │ All Traffic Exits
-              ▼
-           Internet (VPS_PUBLIC_IP)
+       ┌──────────────┐            ┌─────────────────┐
+       │   Internet   │            │ Cloudflare Edge │
+       │      via     │            │   (Global CDN)  │
+       │ VPS_PUBLIC_IP│            └────────┬────────┘
+       └──────────────┘                     │
+              ▲                             │ Secure Tunnel
+              │                             ▼
+┌─────────────┴─────────────────────────────┴─────────────────┐
+│                         VPS SERVER                          │
+│  ┌─────────────────────┐       ┌──────────────────────┐     │
+│  │  WireGuard          │       │  cloudflared         │     │
+│  │  (wg0)              │       │  Tunnel Service      │     │
+│  │  10.8.0.1/24        │       │  (Port 22, 5910+)    │     │
+│  |  Routes to Internet |       └──────────┬───────────┘     │
+│  |  NAT/Masquerade     |                  |                 │
+│  └─────────────────────┘                  |                 |
+│                                           │                 │
+│                                           ▼                 │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │            VNC SESSIONS (Desktop Access)              │  │
+│  │            - Accessed via Cloudflare Edge             │  │
+│  │            - Users: alice, bob, etc.                  │  │
+│  │            - Ports: 5910, 5911, 5912...               │  │
+│  │                                                       │  │
+│  │   ┌───────────────────────────────────────────────┐   │  │
+│  │   │  L2TP Client (run ./run_vpn.sh in VNC)        │   │  │
+│  │   │  Routes specific VPN_APPS traffic:            │   │  │
+│  │   │  - xrdp, remmina, etc.                        │   │  │
+│  │   └───────────────────────────────────────────────┘   │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│          ┌─────────┐  ┌──────────┐  ┌──────────┐            │
+│          │ Docker  │  │ VS Code  │  │ Desktop  │            │
+│          │         │  │  Chrome  │  │   Apps   │            │
+│          └─────────┘  └──────────┘  └──────────┘            │
+└─────────────────────────────────────────────────────────────┘
+
+TRAFFIC FLOWS:
+1. WireGuard VPN:  Client → VPS (encrypted) → Internet (exits as VPS_PUBLIC_IP)
+2. VNC/SSH Access: Client → Cloudflare Edge → cloudflared → VNC/SSH on VPS
+3. L2TP in VNC:    VNC Session Apps → L2TP Server (routes specific VPN_APPS)
 ```
 
 ### What You Get
