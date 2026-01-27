@@ -46,44 +46,29 @@ if [[ ! -f /etc/iproute2/rt_tables.backup ]]; then
     cp /etc/iproute2/rt_tables /etc/iproute2/rt_tables.backup
 fi
 
-# Parse VPN list
-if [[ -z "$VPN_LIST" ]]; then
-    print_error "VPN_LIST not defined in $ENV_FILE"
-    exit 1
-fi
-
-print_message "Configured VPN types: $VPN_LIST"
-
-# Convert VPN_LIST to array
-IFS=' ' read -ra VPN_ARRAY <<< "$VPN_LIST"
-VPN_COUNT=${#VPN_ARRAY[@]}
-
-print_message "Number of VPNs to configure: $VPN_COUNT"
 
 # Starting table number
 TABLE_NUM=${VR_TABLE_START:-200}
 
 # Create routing tables for each VPN
-for vpn_type in "${VPN_ARRAY[@]}"; do
-    TABLE_NAME="vpn_${vpn_type}"
-    
-    print_message "Creating routing table '$TABLE_NAME' with ID $TABLE_NUM..."
-    
-    # Check if table already exists
-    if grep -q "^$TABLE_NUM[[:space:]]*$TABLE_NAME" /etc/iproute2/rt_tables; then
-        print_warning "Routing table '$TABLE_NAME' already exists, skipping..."
-    else
-        echo "$TABLE_NUM $TABLE_NAME" >> /etc/iproute2/rt_tables
-        print_message "Routing table '$TABLE_NAME' created with ID $TABLE_NUM"
-    fi
-    
-    # Create fwmark for this VPN (same as table number for simplicity)
-    FWMARK=$TABLE_NUM
-    print_message "VPN '$vpn_type' will use fwmark $FWMARK and table $TABLE_NAME"
-    
-    # Increment table number for next VPN
-    TABLE_NUM=$((TABLE_NUM + 1))
-done
+TABLE_NAME="vpn_l2tp"
+
+print_message "Creating routing table '$TABLE_NAME' with ID $TABLE_NUM..."
+
+# Check if table already exists
+if grep -q "^$TABLE_NUM[[:space:]]*$TABLE_NAME" /etc/iproute2/rt_tables; then
+    print_warning "Routing table '$TABLE_NAME' already exists, skipping..."
+else
+    echo "$TABLE_NUM $TABLE_NAME" >> /etc/iproute2/rt_tables
+    print_message "Routing table '$TABLE_NAME' created with ID $TABLE_NUM"
+fi
+
+# Create fwmark for this VPN (same as table number for simplicity)
+FWMARK=$TABLE_NUM
+print_message "VPN l2tp will use fwmark $FWMARK and table $TABLE_NAME"
+
+# Increment table number for next VPN
+TABLE_NUM=$((TABLE_NUM + 1))
 
 # Note: Required packages are installed by setup_ws.sh
 
@@ -133,8 +118,7 @@ print_message "Helper script created: /usr/local/bin/show-vpn-routes.sh"
 # Summary
 print_message "=== Virtual Router Setup Complete ==="
 echo ""
-echo -e "${YELLOW}Configured VPNs:${NC} ${GREEN}$VPN_LIST${NC}"
-echo -e "${YELLOW}Number of routing tables:${NC} ${GREEN}$VPN_COUNT${NC}"
+echo -e "${YELLOW}Configured VPNs:${NC} ${GREEN}L2TP${NC}"
 echo -e "${YELLOW}Table ID range:${NC} ${GREEN}${VR_TABLE_START:-200}-$((TABLE_NUM-1))${NC}"
 echo ""
 echo -e "To view routing tables: ${GREEN}show-vpn-routes.sh${NC}"
