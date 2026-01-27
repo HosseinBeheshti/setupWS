@@ -230,7 +230,6 @@ VPS_PUBLIC_IP="1.2.3.4"                  # ← Your VPS public IP
 WG_SERVER_PORT="51820"
 WG_SERVER_ADDRESS="10.8.0.1/24"
 WG_CLIENT_DNS="1.1.1.1, 1.0.0.1"
-WG_CLIENT_COUNT=3                        # ← Number of VPN clients
 
 # VNC Users (configure at least one)
 VNCUSER1_USERNAME='alice'
@@ -269,7 +268,7 @@ sudo ./setup_ws.sh
 2. Configures virtual router for VPN traffic
 3. Sets up L2TP/IPsec for VPN_APPS routing in VNC sessions
 4. Creates VNC servers for each user
-5. Installs and configures WireGuard VPN server for client devices
+5. Installs and configures WireGuard VPN server (clients managed separately)
 6. Installs cloudflared and configures Cloudflare Access
 
 **Duration**: 10-15 minutes depending on VPS speed.
@@ -280,7 +279,48 @@ sudo ./setup_ws.sh
 
 ## Part 3: Client Setup
 
-### 3.1 Connect via WireGuard VPN
+### 3.1 Add and Configure WireGuard Clients
+
+**Interactive Menu (Recommended):**
+
+```bash
+sudo ./manage_wg_client.sh
+```
+
+This will show an interactive menu:
+```
+1. List all clients
+2. Add new client
+3. Remove client
+4. Show client configuration
+5. Show QR code for client
+6. Show WireGuard status
+0. Exit
+```
+
+**Or use direct commands:**
+
+```bash
+# Add clients
+sudo ./manage_wg_client.sh add laptop
+sudo ./manage_wg_client.sh add phone
+
+# List all clients
+sudo ./manage_wg_client.sh list
+
+# Show QR code for mobile device
+sudo ./manage_wg_client.sh qr phone
+
+# Show client configuration
+sudo ./manage_wg_client.sh show laptop
+
+# Remove a client
+sudo ./manage_wg_client.sh remove old-device
+```
+
+---
+
+### 3.2 Connect via WireGuard VPN
 
 **Desktop Clients (Linux/Mac/Windows):**
 
@@ -290,12 +330,12 @@ sudo ./setup_ws.sh
 
 2. **Copy client configuration from VPS**:
    ```bash
-   scp root@YOUR_VPS_IP:/etc/wireguard/clients/client1.conf ~/
+   scp root@YOUR_VPS_IP:/etc/wireguard/clients/laptop.conf ~/
    ```
 
 3. **Import configuration**:
-   - Linux/Mac: `sudo wg-quick up ~/client1.conf`
-   - Windows/Mac GUI: Import `client1.conf` file
+   - Linux/Mac: `sudo wg-quick up ~/laptop.conf`
+   - Windows/Mac GUI: Import `laptop.conf` file
 
 4. **Verify connection**:
    ```bash
@@ -308,14 +348,14 @@ sudo ./setup_ws.sh
 1. **Install WireGuard app** from App Store/Play Store
 2. **Generate QR code on VPS**:
    ```bash
-   cat /etc/wireguard/clients/client1_qr.txt
+   sudo ./manage_wg_client.sh qr phone
    ```
 3. **Scan QR code** in WireGuard app
 4. **Connect** and verify IP
 
 ---
 
-### 3.2 Connect to VNC Desktop
+### 3.3 Connect to VNC Desktop
 
 **Direct Connection (when NOT using Cloudflare Access):**
 
@@ -333,7 +373,7 @@ sudo ./setup_ws.sh
 
 ---
 
-### 3.3 Access via SSH
+### 3.4 Access via SSH
 
 **Direct SSH**:
 ```bash
@@ -347,7 +387,7 @@ ssh ssh-vps.yourteam.cloudflareaccess.com
 
 ---
 
-### 3.4 Use L2TP for VPN_APPS in VNC Sessions
+### 3.5 Use L2TP for VPN_APPS in VNC Sessions
 
 L2TP is configured to route specific applications through a remote VPN.
 This is useful when working in a VNC session and need certain apps routed.
@@ -397,7 +437,41 @@ ip addr show  # Linux/Mac
 
 ---
 
-### 4.2 Verify VNC Access
+### 4.2 WireGuard Client Management
+
+**Interactive menu:**
+
+```bash
+sudo ./manage_wg_client.sh
+```
+
+Select from the menu to manage clients easily.
+
+**Direct commands:**
+
+```bash
+# List all clients and their connection status
+sudo ./manage_wg_client.sh list
+
+# Add a new client
+sudo ./manage_wg_client.sh add tablet
+
+# Show client configuration file
+sudo ./manage_wg_client.sh show tablet
+
+# Generate/show QR code for mobile
+sudo ./manage_wg_client.sh qr tablet
+
+# Remove a client
+sudo ./manage_wg_client.sh remove old-laptop
+
+# Check active connections
+sudo wg show
+```
+
+---
+
+### 4.3 Verify VNC Access
 
 ```bash
 # On VPS - check VNC services
@@ -410,7 +484,7 @@ Connect via VNC client to verify desktop access.
 
 ---
 
-### 4.3 Verify Cloudflare Tunnel
+### 4.4 Verify Cloudflare Tunnel
 
 ```bash
 # On VPS
@@ -565,7 +639,23 @@ A: Use both for different purposes:
 A: No. WireGuard VPN connects directly to VPS. Cloudflare One Agent is only needed for accessing SSH/VNC via Cloudflare Access.
 
 **Q: Can I add more WireGuard clients later?**  
-A: Yes. Edit `WG_CLIENT_COUNT` in `workstation.env` and re-run `sudo ./setup_wg.sh`.
+A: Yes. Use the management script:
+```bash
+sudo ./manage_wg_client.sh add new-device-name
+```
+You can add unlimited clients on-demand.
+
+**Q: How do I remove a WireGuard client?**  
+A: Use the management script:
+```bash
+sudo ./manage_wg_client.sh remove device-name
+```
+
+**Q: How do I see all my WireGuard clients?**  
+A: Use the list command:
+```bash
+sudo ./manage_wg_client.sh list
+```
 
 **Q: How do I add more VNC users?**  
 A: Add `VNCUSER4_*` variables to `workstation.env`, increment `VNC_USER_COUNT`, and run `sudo ./setup_vnc.sh`.
