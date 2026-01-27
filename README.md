@@ -140,7 +140,7 @@ Note: include this policy in the **Device enrollment permissions**
    **Copy only the token part** (long string starting with `eyJ...`)
 8. **Save this token** - you'll add it to `workstation.env` as `CLOUDFLARE_TUNNEL_TOKEN`
 9. Click **Next**
-10. **Important**: Don't add any public hostname routes yet (we'll do this later)
+10. **Important**: Add any public hostname routes then delete it(we'll add applications later)
 11. Click **Next** again to finish
 **Result**: Tunnel created and ready for configuration on VPS
 
@@ -150,24 +150,21 @@ Note: include this policy in the **Device enrollment permissions**
 
 Configure SSH access through Cloudflare Access:
 
-1. Go to: **Access → Applications**
+1. Go to: **Access controls → Applications**
 2. Click **Add an application**
 3. Select **Self-hosted**
 4. Configure the application:
    - **Application name**: `VPS SSH`
    - **Session Duration**: `24 hours` (or your preference)
-   - **Application domain**:
+   - **Public hostname**:
      - Subdomain: `ssh-vps`
-     - Domain: Select your team domain
+     - Domain: Select your team domain from dropdown
+     - Path: Leave empty
    - Click **Next**
 
 5. Add an Access policy:
    - Click **Select** next to the policy dropdown
    - Select your existing **Admin Policy** (the one you created earlier)
-   - Or create a new policy if needed:
-     - Policy name: `Allow Admin`
-     - Action: `Allow`
-     - Configure rules → Selector: `Emails` → Value: `your-admin@gmail.com`
    - Click **Next**
 
 6. Additional settings (optional):
