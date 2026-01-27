@@ -600,10 +600,15 @@ Connect via VNC client to verify desktop access.
 sudo systemctl status cloudflared
 
 # Should show: active (running)
+# You should see "Registered tunnel connection" messages
 
-# Check tunnel info
-sudo cloudflared tunnel info vps-tunnel
+# Check recent logs
+sudo journalctl -u cloudflared -n 20
 ```
+
+**Note**: Token-based tunnels don't support `cloudflared tunnel info` command. Instead:
+- Check service status with `systemctl status cloudflared`
+- Verify in Cloudflare dashboard: **Networks → Tunnels** (should show "Healthy" status)
 
 **Test Access with WARP Client:**
 
@@ -747,12 +752,14 @@ systemctl status vncserver-alice@1
 # Live logs
 sudo journalctl -u cloudflared -f
 
-# Check tunnel status
-sudo cloudflared tunnel info vps-tunnel
+# Check service status
+sudo systemctl status cloudflared
 
-# List all tunnels
-sudo cloudflared tunnel list
+# View recent activity
+sudo journalctl -u cloudflared -n 50
 ```
+
+**Note**: Token-based tunnels don't support `cloudflared tunnel info` or `tunnel list` commands.
 
 **Check in Dashboard:**
 - Go to **Networks → Tunnels**

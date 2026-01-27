@@ -146,9 +146,9 @@ sleep 5
 if systemctl is-active --quiet cloudflared; then
     print_message "✓ cloudflared service started successfully"
     
-    # Try to get tunnel info
-    print_message "Tunnel information:"
-    cloudflared tunnel info 2>/dev/null || print_warning "  (Tunnel connected via token)"
+    # Show connection status (token-based tunnels don't support 'tunnel info')
+    print_message "Tunnel status:"
+    systemctl status cloudflared --no-pager -l | grep -E "(Active:|Main PID:|Registered tunnel)" || true
 else
     print_error "cloudflared service failed to start!"
     print_error "Check logs with: journalctl -xeu cloudflared -n 50"
@@ -215,15 +215,14 @@ echo -e "   - Configure access policies with Gmail + OTP"
 echo ""
 echo -e "3. ${BLUE}Verify Tunnel Connection:${NC}"
 echo -e "   ${CYAN}sudo systemctl status cloudflared${NC}"
-echo -e "   ${CYAN}sudo cloudflared tunnel info $TUNNEL_NAME${NC}"
+echo -e "   ${CYAN}sudo journalctl -u cloudflared -n 20${NC}"
+echo ""
+echo -e "   ${YELLOW}Note:${NC} Token-based tunnels don't support 'cloudflared tunnel info' command"
+echo -e "   Check the Cloudflare dashboard (Networks → Tunnels) to verify connection"
 echo ""
 echo -e "4. ${BLUE}VPN Access (Direct, NOT via Cloudflare):${NC}"
 echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
-echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
-echo ""
-echo -e "4. ${BLUE}VPN Access (Direct, NOT via Cloudflare):${NC}"
-echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
-echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
+echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC} in VNC sessions"
 echo ""
 
 echo -e "${CYAN}Important:${NC} VPN traffic (WireGuard/L2TP) bypasses Cloudflare and connects directly to VPS"
