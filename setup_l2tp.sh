@@ -187,9 +187,15 @@ if [[ -n "$VPN_APPS" ]]; then
     done
 fi
 
-# Save iptables rules
+# Save iptables rules (check if command exists)
 print_message "Saving iptables rules..."
-netfilter-persistent save
+if command -v netfilter-persistent &> /dev/null; then
+    netfilter-persistent save
+elif command -v iptables-save &> /dev/null; then
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+else
+    print_warning "Could not save iptables rules (netfilter-persistent not found)"
+fi
 
 # --- Configure Firewall ---
 print_message "Configuring firewall for L2TP..."
