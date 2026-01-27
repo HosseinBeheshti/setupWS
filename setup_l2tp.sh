@@ -2,6 +2,10 @@
 
 # L2TP/IPsec VPN Setup Script (One-time setup)
 # This script installs packages and configures L2TP/IPsec client
+# Purpose: Route specific VPN_APPS through L2TP in VNC sessions
+# Usage: Called by setup_ws.sh during initial setup
+#        Use ./run_vpn.sh in VNC sessions to activate L2TP
+# Note: WireGuard is a separate independent VPN service for client devices
 
 # Exit on any error
 set -e
@@ -216,7 +220,8 @@ sleep 2
 print_message "=== L2TP/IPsec VPN Setup Complete ==="
 echo ""
 echo -e "${GREEN}Setup completed successfully!${NC}"
-echo -e "To connect to VPN, run: ${GREEN}sudo ./run_vpn.sh${NC} (select L2TP when prompted)"
+echo -e "To route VPN_APPS through L2TP, run: ${GREEN}sudo ./run_vpn.sh${NC} in your VNC session"
+echo -e "${YELLOW}Note:${NC} WireGuard is a separate independent VPN service for client devices"
 echo ""
 echo -e "${YELLOW}Configuration:${NC}"
 echo -e "  Server: $L2TP_SERVER_IP"

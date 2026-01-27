@@ -1,12 +1,16 @@
 # Secure Remote Access Gateway with WireGuard VPN
 
-**Hybrid secure access solution combining WireGuard VPN with Cloudflare Zero Trust Access management.**
+**Hybrid secure access solution combining WireGuard VPN for clients with L2TP for app-specific routing in VNC sessions, all managed through Cloudflare Zero Trust Access.**
 
 ---
 
 ## Architecture Overview
 
-This setup provides two independent security layers:
+This setup provides two VPN services and zero-trust access control:
+
+- **WireGuard VPN**: Independent VPN service for client devices (all traffic)
+- **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
+- **Cloudflare Zero Trust**: Identity-aware SSH/VNC access management
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -32,8 +36,11 @@ This setup provides two independent security layers:
 │           ▼                                                │
 │    ┌────────────┐    ┌─────────┐    ┌────────────┐         │
 │    │   VNC      │    │  Docker │    │  Desktop   │         │
-│    │  Servers   │    │         │    │  Apps      │         │
-│    └────────────┘    └─────────┘    └────────────┘         │
+│    │  Sessions  │    │         │    │  Apps      │         │
+│    │            │    └─────────┘    └────────────┘         │
+│    │ L2TP for   │                                          │
+│    │ VPN_APPS   │  (run ./run_vpn.sh in VNC)               │
+│    └────────────┘                                          │
 └────────────────────────────────────────────────────────────┘
               │
               │ All Traffic Exits
@@ -43,11 +50,11 @@ This setup provides two independent security layers:
 
 ### What You Get
 
-✅ **WireGuard VPN** - True all-traffic VPN with your VPS as exit point  
-✅ **Cloudflare Access** - Identity-aware SSH/VNC access (Gmail + OTP)  
-✅ **Zero Trust Security** - Policy-based access control for management  
-✅ **Multiple VNC Users** - Individual desktop sessions per user  
-✅ **L2TP Fallback** - Optional VPN for devices without WireGuard support  
+✅ **WireGuard VPN** - Independent VPN service for client devices (full tunnel)
+✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions (VPN_APPS)
+✅ **Cloudflare Access** - Identity-aware SSH/VNC access (Gmail + OTP)
+✅ **Zero Trust Security** - Policy-based access control for management
+✅ **Multiple VNC Users** - Individual desktop sessions per user
 ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
 
 ---
@@ -215,14 +222,14 @@ VNCUSER1_PORT='5910'
 # Add more users as needed (VNCUSER2_, VNCUSER3_, etc.)
 VNC_USER_COUNT=3
 
-# VPN List (which VPN types to configure)
-VPN_LIST="l2tp wg"  # wg=WireGuard, l2tp=L2TP fallback
-
-# Optional: L2TP/IPsec Configuration (for fallback VPN)
+# L2TP/IPsec Configuration (for VPN_APPS in VNC sessions)
 L2TP_SERVER_IP='your.l2tp.server.ip'
 L2TP_IPSEC_PSK='preshared_key'
 L2TP_USERNAME='username'
 L2TP_PASSWORD='password'
+
+# Apps to route through L2TP (use ./run_vpn.sh in VNC)
+VPN_APPS="xrdp remmina"
 ```
 
 4. **Save and exit** (`:wq` in vim)
@@ -238,11 +245,11 @@ sudo ./setup_ws.sh
 ```
 
 **What this does:**
-1. Installs all required packages (VNC, WireGuard, Docker, VS Code, Chrome, etc.)
+1. Installs all required packages (VNC, WireGuard, L2TP, Docker, VS Code, Chrome, etc.)
 2. Configures virtual router for VPN traffic
-3. Sets up L2TP/IPsec (if enabled)
+3. Sets up L2TP/IPsec for VPN_APPS routing in VNC sessions
 4. Creates VNC servers for each user
-5. Installs and configures WireGuard VPN server
+5. Installs and configures WireGuard VPN server for client devices
 6. Installs cloudflared and configures Cloudflare Access
 
 **Duration**: 10-15 minutes depending on VPS speed.
@@ -320,15 +327,23 @@ ssh ssh-vps.yourteam.cloudflareaccess.com
 
 ---
 
-### 3.4 L2TP/IPsec Fallback (Optional)
+### 3.4 Use L2TP for VPN_APPS in VNC Sessions
 
-For devices that can't run WireGuard:
+L2TP is configured to route specific applications through a remote VPN.
+This is useful when working in a VNC session and need certain apps routed.
 
+**In your VNC session:**
 ```bash
 sudo ./run_vpn.sh
 ```
 
-Configure L2TP client with credentials from `workstation.env`.
+This will:
+- Connect to L2TP VPN server
+- Route traffic from VPN_APPS (e.g., xrdp, remmina) through L2TP
+- Keep other VNC session traffic using normal routing
+
+**Note:** WireGuard is a separate independent VPN service for your client devices.
+L2TP is only for routing specific apps in VNC sessions.
 
 ---
 
@@ -515,11 +530,16 @@ sudo cloudflared tunnel info vps-access
 
 ## FAQ
 
-**Q: Can I use both WireGuard and Cloudflare Access simultaneously?**  
-A: Yes! They serve different purposes. Use WireGuard for VPN traffic, Cloudflare Access for SSH/VNC management.
+**Q: Can I use both WireGuard and L2TP simultaneously?**  
+A: Yes! They serve different purposes:
+- **WireGuard**: Independent VPN service for client devices (routes all traffic through VPS)
+- **L2TP**: Routes specific VPN_APPS in VNC sessions (run ./run_vpn.sh in VNC)
+- Use WireGuard on your laptop/phone, and L2TP in VNC for app-specific routing
 
 **Q: Which VPN should I use - WireGuard or L2TP?**  
-A: WireGuard is recommended (faster, more secure). L2TP is fallback for devices without WireGuard support.
+A: Use both for different purposes:
+- **WireGuard**: For your client devices (laptop, phone) - full VPN service
+- **L2TP**: In VNC sessions for routing specific apps (xrdp, remmina, etc.)
 
 **Q: Do I need Cloudflare One Agent for VPN?**  
 A: No. WireGuard VPN connects directly to VPS. Cloudflare One Agent is only needed for accessing SSH/VNC via Cloudflare Access.

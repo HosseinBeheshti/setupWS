@@ -6,9 +6,9 @@
 # This script orchestrates the complete VPS setup in the correct order:
 # 1. Install all required packages (consolidated from all scripts)
 # 2. Run setup_virtual_router.sh
-# 3. Run setup_l2tp.sh (if enabled)
+# 3. Run setup_l2tp.sh (always installed for VPN_APPS)
 # 4. Run setup_vnc.sh
-# 5. Run setup_wg.sh
+# 5. Run setup_wg.sh (always installed for client VPN service)
 # 6. Run setup_ztna.sh
 #
 # Run with: sudo ./setup_ws.sh
@@ -63,7 +63,7 @@ echo -e "${CYAN}Configuration:${NC}"
 echo -e "  VPS IP: ${GREEN}${VPS_PUBLIC_IP:-auto-detect}${NC}"
 echo -e "  VNC Users: ${GREEN}$VNC_USER_COUNT${NC}"
 echo -e "  WireGuard Clients: ${GREEN}${WG_CLIENT_COUNT:-3}${NC}"
-echo -e "  VPN List: ${GREEN}${VPN_LIST:-l2tp wg}${NC}"
+echo -e "  L2TP Apps: ${GREEN}${VPN_APPS:-none}${NC}"
 echo ""
 
 # ============================================================
@@ -105,15 +105,13 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     tigervnc-standalone-server \
     firefox
 
-# L2TP/IPsec packages (from setup_l2tp.sh)
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    print_message "Installing L2TP/IPsec VPN client packages..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        strongswan \
-        xl2tpd \
-        network-manager-l2tp \
-        netcat-openbsd
-fi
+# L2TP/IPsec packages (always installed for VPN_APPS routing)
+print_message "Installing L2TP/IPsec VPN client packages..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    strongswan \
+    xl2tpd \
+    network-manager-l2tp \
+    netcat-openbsd
 
 # VPN Apps (from setup_l2tp.sh VPN_APPS)
 if [[ -n "$VPN_APPS" ]]; then
@@ -223,19 +221,15 @@ fi
 print_message "✓ Virtual Router configured"
 echo ""
 
-# 5.2: Setup L2TP VPN (if enabled)
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    print_message "--- Running setup_l2tp.sh ---"
-    ./setup_l2tp.sh
-    if [[ $? -ne 0 ]]; then
-        print_error "L2TP VPN setup failed!"
-        exit 1
-    fi
-    print_message "✓ L2TP VPN configured"
-    echo ""
-else
-    print_warning "L2TP VPN not in VPN_LIST, skipping..."
+# 5.2: Setup L2TP VPN (always installed for VPN_APPS)
+print_message "--- Running setup_l2tp.sh ---"
+./setup_l2tp.sh
+if [[ $? -ne 0 ]]; then
+    print_error "L2TP VPN setup failed!"
+    exit 1
 fi
+print_message "✓ L2TP VPN configured for VPN_APPS"
+echo ""
 
 # 5.3: Setup VNC Server
 print_message "--- Running setup_vnc.sh ---"
@@ -279,10 +273,8 @@ echo -e "  ✓ Core system utilities and networking tools"
 echo -e "  ✓ Docker Engine and Docker Compose"
 echo -e "  ✓ VS Code and Google Chrome"
 echo -e "  ✓ VNC Server with $VNC_USER_COUNT user(s)"
-echo -e "  ✓ WireGuard VPN Server"
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    echo -e "  ✓ L2TP/IPsec VPN (fallback)"
-fi
+echo -e "  ✓ WireGuard VPN Server (for client devices)"
+echo -e "  ✓ L2TP/IPsec VPN (for VPN_APPS in VNC sessions)"
 echo -e "  ✓ Cloudflare Zero Trust Access (SSH/VNC)"
 echo -e "  ✓ Virtual Router for VPN traffic"
 echo ""
@@ -338,11 +330,10 @@ echo -e "   - Connect with WireGuard client"
 echo -e "   - Verify exit IP: ${CYAN}curl ifconfig.me${NC}"
 echo -e "   - Should show: ${GREEN}$VPS_PUBLIC_IP${NC}"
 echo -e ""
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    echo -e "4. ${BLUE}Connect via L2TP (optional):${NC}"
-    echo -e "   Run: ${CYAN}sudo ./run_vpn.sh${NC}"
-    echo -e ""
-fi
+echo -e "4. ${BLUE}Use L2TP for VPN_APPS (in VNC session):${NC}"
+echo -e "   Run: ${CYAN}sudo ./run_vpn.sh${NC}"
+echo -e "   Routes apps: ${GREEN}$VPN_APPS${NC}"
+echo -e ""
 echo -e "5. ${BLUE}Monitor services:${NC}"
 echo -e "   - WireGuard: ${CYAN}sudo wg show${NC}"
 echo -e "   - VNC: ${CYAN}systemctl status vncserver-<username>@<display>${NC}"
