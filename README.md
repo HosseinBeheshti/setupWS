@@ -95,9 +95,8 @@ TRAFFIC FLOWS:
 Set up authentication method for your users:
 
 1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
-2. Navigate to: **Settings → Authentication**
-3. Scroll to **Login methods** section
-4. Click **Add new** under Login methods
+2. Navigate to: **Integrations → Identity providers**
+4. Click **Add an identity provider**
 5. Select **One-time PIN**
 6. Click **Save**
 
