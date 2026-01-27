@@ -104,48 +104,44 @@ Set up authentication method for your users:
 
 ---
 
-### 1.2 Configure Device Enrollment (Optional - for WARP clients)
+### 1.2 Configure Device Enrollment/Connection Policy
 
-Set up device enrollment policy if you want to use WARP client:
+Allow authorized users to enroll/connect their devices:
 
-1. Go to: **Settings → WARP Client**
-2. Under **Device enrollment permissions**, click **Manage**
-3. Click **Add a rule**
-4. Configure the enrollment rule:
-   - **Rule name**: `Admin Enrollment`
-   - **Rule action**: `Allow`
-   - **Configure rules**: 
-     - Selector: `Emails`
-     - Value: `your-admin@gmail.com`
+1. Go to: **Team & Resources → Devices → Management**
+2. Under **Device enrollment**, ensure these settings:
+   - **Device enrollment permissions**: Select **Manage**
+3. Under **Access policies**, click **Create new policy**
+4. Configure Policy:
+   - **Policy name**: `Admin Policy`
+   - **Selector**: `Emails`
+   - **Value**: `user1@gmail.com`
 5. Click **Save**
 
-**Note**: This is optional and only needed if you plan to use WARP client for device management. Not required for SSH/VNC access via Cloudflare Tunnel.
+Note: include this policy in the **Device enrollment permissions**
 
 ---
 
 ### 1.3 Create Cloudflare Tunnel
 
-Create a tunnel to connect your VPS to Cloudflare's network:
-
-1. Go to: **Networks → Tunnels**
+1. Go to: **Networks → Connectors → Cloudflare Tunnels**
 2. Click **Create a tunnel**
-3. Select **Cloudflared** connector
-4. Enter tunnel name: `vps-tunnel` (or any name you prefer)
+3. Select **Cloudflared** (NOT WARP Connector)
+4. **Tunnel name**: `vps-tunnel` (or any name you prefer)
 5. Click **Save tunnel**
-6. On the next screen, select your environment: **Debian** (for Ubuntu)
-7. **Copy the tunnel token** from the installation command:
+6. Select **Linux** as the operating system
+7. You'll see installation commands - **copy the token** from the command
    
+   Example command:
    ```bash
-   sudo cloudflared service install eyJhIjoiN2E...
+   cloudflared service install <YOUR-TOKEN-HERE>
    ```
    
-   Copy only the token part (the long string starting with `eyJ`)
-   
+   **Copy only the token part** (long string starting with `eyJ...`)
 8. **Save this token** - you'll add it to `workstation.env` as `CLOUDFLARE_TUNNEL_TOKEN`
 9. Click **Next**
-10. Skip the route configuration for now - click **Next** without adding routes
-11. On the overview page, your tunnel will show as "Inactive" until you install cloudflared on your VPS
-
+10. **Important**: Don't add any public hostname routes yet (we'll do this later)
+11. Click **Next** again to finish
 **Result**: Tunnel created and ready for configuration on VPS
 
 ---
@@ -197,7 +193,7 @@ Configure the tunnel to route SSH and VNC traffic:
 
 ---
 
-### 1.6 Create Access Application for VNC (Optional)
+### 1.6 Create Access Application for VNC
 
 If you want to access VNC through Cloudflare (recommended):
 
