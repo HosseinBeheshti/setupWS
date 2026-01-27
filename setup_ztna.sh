@@ -88,12 +88,10 @@ ufw allow ${WG_SERVER_PORT:-51820}/udp comment 'WireGuard VPN' > /dev/null
 print_message "  ✓ Allowed WireGuard (port ${WG_SERVER_PORT:-51820}/udp)"
 
 # Allow L2TP/IPsec (direct access, bypass Cloudflare)
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    ufw allow 500/udp comment 'IPsec' > /dev/null
-    ufw allow 1701/udp comment 'L2TP' > /dev/null
-    ufw allow 4500/udp comment 'IPsec NAT-T' > /dev/null
-    print_message "  ✓ Allowed L2TP/IPsec (ports 500, 1701, 4500/udp)"
-fi
+ufw allow 500/udp comment 'IPsec' > /dev/null
+ufw allow 1701/udp comment 'L2TP' > /dev/null
+ufw allow 4500/udp comment 'IPsec NAT-T' > /dev/null
+print_message "  ✓ Allowed L2TP/IPsec (ports 500, 1701, 4500/udp)"
 
 # Allow VNC ports (for direct access if needed)
 for ((i=1; i<=VNC_USER_COUNT; i++)); do
@@ -216,9 +214,7 @@ echo -e "${CYAN}VPS Information:${NC}"
 echo -e "  IP Address:   ${GREEN}$VPS_PUBLIC_IP${NC}"
 echo -e "  SSH Port:     ${GREEN}22${NC}"
 echo -e "  WireGuard:    ${GREEN}${WG_SERVER_PORT:-51820}/udp${NC}"
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    echo -e "  L2TP/IPsec:   ${GREEN}500, 1701, 4500/udp${NC}"
-fi
+echo -e "  L2TP/IPsec:   ${GREEN}500, 1701, 4500/udp${NC}"
 echo ""
 
 echo -e "${CYAN}VNC Ports:${NC}"
@@ -255,15 +251,11 @@ echo -e "   ${CYAN}sudo cloudflared tunnel info $TUNNEL_NAME${NC}"
 echo ""
 echo -e "4. ${BLUE}VPN Access (Direct, NOT via Cloudflare):${NC}"
 echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
-fi
+echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
 echo ""
 echo -e "4. ${BLUE}VPN Access (Direct, NOT via Cloudflare):${NC}"
 echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
-fi
+echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC}"
 echo ""
 
 echo -e "${CYAN}Important:${NC} VPN traffic (WireGuard/L2TP) bypasses Cloudflare and connects directly to VPS"
