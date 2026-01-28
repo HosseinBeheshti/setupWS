@@ -262,43 +262,106 @@ To access SSH and VNC through Cloudflare, install the Cloudflare One Agent:
 
 ### 1.8 Configure Custom WARP Endpoint (Bypass Iran Filtering)
 
-If you're in a region where Cloudflare IPs are filtered (like Iran), configure a custom WARP endpoint to route connections through your VPS tunnel:
+If you're in a region where Cloudflare IPs are filtered (like Iran), configure a custom WARP endpoint to route connections through your VPS tunnel using MDM deployment.
 
-**In Cloudflare Zero Trust Dashboard:**
+**Prerequisites:**
+- VPS setup completed with WARP routing enabled (Part 2)
+- Cloudflare One Agent installed on your device
+- Your `VPS_PUBLIC_IP` from workstation.env
 
-1. Go to: **Settings → WARP Client → Device settings**
-2. Click **Manage** on your device profile (or create a new profile)
-3. Scroll down to **Gateway with WARP settings**
-4. Find **Custom endpoint** section
-5. Click **Add endpoint**
-6. Configure endpoint:
-   - **Endpoint IPv4**: Enter your `VPS_PUBLIC_IP` (from workstation.env)
-   - **Endpoint UDP Port**: `7844` (default WARP routing port)
-   - **Name**: `VPS Custom Endpoint` (descriptive name)
-7. Click **Save**
-8. Make sure this profile is assigned to your devices
+**Deploy via MDM Configuration:**
 
-**On Your Device:**
+The custom WARP endpoint is configured using the `override_warp_endpoint` MDM parameter. Choose your platform:
 
-1. Open Cloudflare One Agent
-2. Go to **Settings → Preferences → Account**
-3. Verify your device profile has the custom endpoint enabled
-4. Disconnect and reconnect the WARP connection
-5. Check connection is working
+<details>
+<summary><b>Windows (MDM XML file)</b></summary>
+
+Create or modify `mdm.xml` and deploy via your MDM solution:
+
+```xml
+<dict>
+  <key>organization</key>
+  <string>your-team-name</string>
+  <key>override_warp_endpoint</key>
+  <string>YOUR_VPS_PUBLIC_IP:7844</string>
+</dict>
+```
+
+Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
+
+</details>
+
+<details>
+<summary><b>macOS (plist file)</b></summary>
+
+Create or modify `/Library/Managed Preferences/com.cloudflare.warp.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>organization</key>
+  <string>your-team-name</string>
+  <key>override_warp_endpoint</key>
+  <string>YOUR_VPS_PUBLIC_IP:7844</string>
+</dict>
+</plist>
+```
+
+Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
+
+</details>
+
+<details>
+<summary><b>Linux</b></summary>
+
+Use the `warp-cli` command to set the override endpoint:
+
+```bash
+# Set custom endpoint
+warp-cli override set warp-endpoint YOUR_VPS_PUBLIC_IP:7844
+
+# Verify the setting
+warp-cli override show
+
+# Register with your organization
+warp-cli registration new
+
+# Connect
+warp-cli connect
+```
+
+Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
+
+</details>
 
 **How It Works:**
-- Cloudflare One Agent connects to your VPS IP on port 7844 (UDP)
-- Your VPS tunnel forwards the WARP traffic to Cloudflare's edge network
+- Cloudflare One Agent connects to your VPS IP on port 7844 (UDP) instead of Cloudflare's default IPs
+- Your VPS tunnel (with WARP routing enabled) forwards the WARP traffic to Cloudflare's edge network
 - This bypasses local ISP filtering of Cloudflare's default IPs
 - All SSH/VNC access still works through the secure tunnel
 
 **Verify It's Working:**
+
+On your device:
 ```bash
-# Check cloudflared logs on VPS to see WARP connections
+# Check WARP connection status
+warp-cli status
+
+# Should show connected and using your custom endpoint
+```
+
+On your VPS:
+```bash
+# Check cloudflared logs to see WARP connections
 sudo journalctl -u cloudflared -f
 ```
 
 You should see WARP routing traffic being handled by your tunnel.
+
+**Documentation Reference:**
+- [MDM Deployment Parameters - override_warp_endpoint](https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/warp/deployment/mdm-deployment/parameters/#override_warp_endpoint)
 
 ---
 
