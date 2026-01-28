@@ -46,7 +46,7 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh")
+REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_warp_relay.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
@@ -63,14 +63,15 @@ echo -e "  VPS IP: ${GREEN}${VPS_PUBLIC_IP:-auto-detect}${NC}"
 echo -e "  VNC Users: ${GREEN}$VNC_USER_COUNT${NC}"
 echo -e "  L2TP Apps: ${GREEN}${VPN_APPS:-none}${NC}"
 if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
-    echo -e "  WARP Endpoint: ${GREEN}Enabled (Port ${WARP_ROUTING_PORT})${NC}"
+    echo -e "  WARP Routing: ${GREEN}Enabled (Port ${WARP_ROUTING_PORT})${NC}"
+    echo -e "  WARP Relay: ${GREEN}Enabled (socat UDP relay)${NC}"
 fi
 echo ""
 
 # ============================================================
 # Step 1: Install All Required Packages
 # ============================================================
-print_header "Step 1/6: Installing All Required Packages"
+print_header "Step 1/7: Installing All Required Packages"
 
 print_message "This will install packages needed by all setup scripts..."
 print_message "Updating package lists..."
@@ -164,7 +165,7 @@ fi
 # ============================================================
 # Step 3: Install VS Code (from setup_vnc.sh embedded install)
 # ============================================================
-print_header "Step 3/6: Installing VS Code"
+print_header "Step 3/7: Installing VS Code"
 
 if ! command -v code &> /dev/null; then
     print_message "Adding Microsoft GPG key and repository..."
@@ -184,7 +185,7 @@ fi
 # ============================================================
 # Step 4: Install Google Chrome (from setup_vnc.sh embedded install)
 # ============================================================
-print_header "Step 4/6: Installing Google Chrome"
+print_header "Step 4/7: Installing Google Chrome"
 
 if ! command -v google-chrome &> /dev/null; then
     print_message "Adding Google Chrome signing key and repository..."
@@ -204,7 +205,7 @@ fi
 # ============================================================
 # Step 5: Run Configuration Scripts
 # ============================================================
-print_header "Step 5/6: Running Configuration Scripts"
+print_header "Step 5/7: Running Configuration Scripts"
 
 # 5.1: Setup Virtual Router
 print_message "--- Running setup_virtual_router.sh ---"
@@ -246,10 +247,25 @@ fi
 print_message "✓ Cloudflare Zero Trust Access configured"
 echo ""
 
+# 5.5: Setup WARP UDP Relay (if enabled)
+if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
+    print_message "--- Running setup_warp_relay.sh ---"
+    ./setup_warp_relay.sh
+    if [[ $? -ne 0 ]]; then
+        print_error "WARP relay setup failed!"
+        exit 1
+    fi
+    print_message "✓ WARP UDP relay configured"
+    echo ""
+else
+    print_message "WARP routing disabled, skipping relay setup"
+    echo ""
+fi
+
 # ============================================================
 # Step 6: Configure Final Firewall Rules
 # ============================================================
-print_header "Step 6/6: Configuring Secure Firewall"
+print_header "Step 6/7: Configuring Secure Firewall"
 
 print_message "Configuring firewall to block direct SSH/VNC access..."
 print_message "Access to SSH/VNC will ONLY be allowed through Cloudflare tunnel"
@@ -293,7 +309,7 @@ echo -e "  ✓ VNC Server with $VNC_USER_COUNT user(s)"
 echo -e "  ✓ L2TP/IPsec VPN (for VPN_APPS in VNC sessions)"
 echo -e "  ✓ Cloudflare Zero Trust Access (SSH/VNC)"
 if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
-    echo -e "  ✓ Cloudflare WARP Custom Endpoint (bypass filtering)"
+    echo -e "  ✓ WARP UDP Relay (socat → Cloudflare WireGuard)"
 fi
 echo -e "  ✓ Virtual Router for VPN traffic"
 echo ""
@@ -329,9 +345,9 @@ echo -e "1. ${BLUE}Connect to VNC:${NC}"
 echo -e "   Use Cloudflare Access: ${CYAN}https://vnc-<user>.yourteam.cloudflareaccess.com${NC}"
 echo -e ""
 echo -e "2. ${BLUE}Configure WARP Custom Endpoint (if in filtered region):${NC}"
-echo -e "   - Dashboard: Settings → WARP Client → Device settings"
-echo -e "   - Add endpoint: ${GREEN}$VPS_PUBLIC_IP:${WARP_ROUTING_PORT:-7844}${NC}"
-echo -e "   - See README.md section 1.8 for details"
+echo -e "   - Client: ${CYAN}warp-cli registration set-custom-endpoint ${VPS_PUBLIC_IP}:${WARP_ROUTING_PORT:-443}${NC}"
+echo -e "   - Dashboard: Set MTU to 1280 (Settings → WARP Client → Device settings)"
+echo -e "   - See README.md section 1.8 for complete guide"
 echo -e ""
 echo -e "3. ${BLUE}Use L2TP for VPN_APPS (in VNC session):${NC}"
 echo -e "   Run: ${CYAN}sudo ./run_vpn.sh${NC}"

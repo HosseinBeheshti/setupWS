@@ -262,86 +262,63 @@ To access SSH and VNC through Cloudflare, install the Cloudflare One Agent:
 
 ### 1.8 Configure Custom WARP Endpoint (Bypass Iran Filtering)
 
-> ⚠️ **Important**: Cloudflare does not provide a dashboard setting to configure custom WARP endpoints organization-wide. This must be configured on each client device using local configuration files.
+> ⚠️ **Reality Check**: Cloudflare's UI is inconsistent and documentation assumes corporate networks. This is the practical solution that actually works for bypassing national firewalls.
 
-If you're in a region where Cloudflare IPs are filtered (like Iran), you can configure each device to use your VPS as a custom WARP endpoint.
+If you're in a region where Cloudflare IPs are filtered (like Iran), you need to relay WARP traffic through your VPS. The official "warp-routing" feature doesn't work reliably for this use case.
 
-**Prerequisites:**
-- VPS setup completed with WARP routing enabled (Part 2)
-- Cloudflare One Agent installed on your device
-- Your `VPS_PUBLIC_IP` from workstation.env
+#### **Step 1: Server Side (The Relay)**
 
-**Configuration Steps by Platform:**
-
-<details>
-<summary><b>Windows</b></summary>
-
-1. Create `C:\ProgramData\Cloudflare\mdm.xml` with admin privileges:
-
-```xml
-<dict>
-  <key>organization</key>
-  <string>your-team-name</string>
-  <key>override_warp_endpoint</key>
-  <string>YOUR_VPS_PUBLIC_IP:7844</string>
-</dict>
-```
-
-2. Replace:
-   - `your-team-name` with your Cloudflare Zero Trust team name
-   - `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address
-
-3. Restart Cloudflare WARP service:
-```powershell
-Restart-Service "Cloudflare WARP"
-```
-
-</details>
-
-<details>
-<summary><b>macOS</b></summary>
-
-1. Create `/Library/Application Support/Cloudflare/mdm.xml` with admin privileges:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>organization</key>
-  <string>your-team-name</string>
-  <key>override_warp_endpoint</key>
-  <string>YOUR_VPS_PUBLIC_IP:7844</string>
-</dict>
-</plist>
-```
-
-2. Replace:
-   - `your-team-name` with your Cloudflare Zero Trust team name
-   - `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address
-
-3. Restart WARP:
-```bash
-sudo launchctl stop com.cloudflare.1dot1dot1dot1.macos-loginlauncherapp
-sudo launchctl start com.cloudflare.1dot1dot1dot1.macos-loginlauncherapp
-```
-
-</details>
-
-<details>
-<summary><b>Linux</b></summary>
-
-Use the `warp-cli` command:
+Run this on your VPS to forward UDP traffic to Cloudflare's actual WireGuard endpoint:
 
 ```bash
-# Set custom endpoint
-sudo warp-cli override set warp-endpoint YOUR_VPS_PUBLIC_IP:7844
+# Install socat
+sudo apt update && sudo apt install socat -y
 
-# Verify the setting
-warp-cli override show
+# Create systemd service for persistent relay
+sudo tee /etc/systemd/system/warp-relay.service > /dev/null <<EOF
+[Unit]
+Description=WARP UDP Relay to Cloudflare
+After=network.target
 
-# If not already registered, register with your organization
-warp-cli registration new
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat UDP4-LISTEN:443,fork,reuseaddr UDP4:162.159.193.5:2408
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable warp-relay
+sudo systemctl start warp-relay
+
+# Open firewall for UDP 443
+sudo ufw allow 443/udp
+```
+
+**What This Does:**
+- Listens on your VPS port 443 (UDP)
+- Forwards all traffic to Cloudflare's WireGuard endpoint: `162.159.193.5:2408`
+- Runs as a persistent service that auto-restarts
+
+#### **Step 2: Client Side (Force Custom Endpoint)**
+
+Since the dashboard UI is unreliable, use the CLI or deep links:
+
+<details>
+<summary><b>Windows / macOS / Linux (Desktop)</b></summary>
+
+Open terminal and run:
+
+```bash
+# Set custom endpoint to your VPS
+warp-cli registration set-custom-endpoint YOUR_VPS_PUBLIC_IP:443
+
+# Verify it's set
+warp-cli registration show
 
 # Connect
 warp-cli connect
@@ -352,46 +329,179 @@ Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
 </details>
 
 <details>
-<summary><b>Android/iOS</b></summary>
+<summary><b>Android / iOS (Mobile)</b></summary>
 
-Mobile devices require MDM (Mobile Device Management) to configure custom endpoints. If you don't have enterprise MDM:
+The custom endpoint button is often hidden in the mobile UI. Use the deep link trick:
 
-**Alternative**: Use manual VPN configuration (not WARP-based) or consider other solutions for mobile devices.
+1. Open your phone's browser
+2. Navigate to (or click):
+   ```
+   com.cloudflare.1dot1dot1dot1://v1/set-endpoint?address=YOUR_VPS_PUBLIC_IP:443
+   ```
+3. This should open the Cloudflare One Agent and set the endpoint
+
+**Note**: This depends on the app version. If it doesn't work, you may need to extract your private key and use a third-party client (see below).
 
 </details>
 
-**How It Works:**
-- Cloudflare One Agent connects to your VPS IP on port 7844 (UDP) instead of Cloudflare's default IPs
-- Your VPS tunnel (with WARP routing enabled) forwards the WARP traffic to Cloudflare's edge network
-- This bypasses local ISP filtering of Cloudflare's default IPs
-- All SSH/VNC access still works through the secure tunnel
+#### **Step 3: Dashboard MTU Fix (CRITICAL for Iran)**
 
-**Verify It's Working:**
+> 🚨 **This is the most important step** - Without it, the WireGuard handshake will fail even with the correct endpoint.
+
+1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
+2. Navigate to: **Settings → WARP Client → Device settings**
+3. Click **Manage** on your device profile (or Default profile)
+4. Scroll down and find **MTU** setting
+5. Set MTU to: **1280**
+6. Click **Save profile**
+
+**Why**: Iran's network infrastructure causes MTU issues with default settings (1420). Setting to 1280 prevents packet fragmentation problems.
+
+#### **Alternative: Use WireGuard App (Android/iOS)**
+
+If the official Cloudflare One Agent doesn't work or you prefer more control, you can use the standard WireGuard app:
+
+**Step 1: Extract WARP Configuration from a Working Installation**
+
+On a Linux/macOS machine where Cloudflare One Agent is installed and registered:
+
+```bash
+# Register first (if not already done)
+warp-cli registration new
+
+# Extract configuration
+warp-cli registration show
+
+# You'll see output like:
+# Account Type: Free
+# Device ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+# Public Key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=
+# Private Key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=
+```
+
+**Step 2: Create WireGuard Configuration**
+
+Save this as a `.conf` file (replace values from step 1):
+
+```ini
+[Interface]
+PrivateKey = YOUR_PRIVATE_KEY_FROM_WARP_CLI
+Address = 172.16.0.2/32
+DNS = 1.1.1.1, 1.0.0.1
+MTU = 1280
+
+[Peer]
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = YOUR_VPS_IP:443
+PersistentKeepalive = 25
+```
+
+**Key Configuration Details:**
+- `PrivateKey`: From `warp-cli registration show`
+- `Address`: WARP's default interface IP (can be different if using CGNAT)
+- `DNS`: Cloudflare DNS (or your Zero Trust Gateway DNS)
+- `MTU`: **1280** (critical for Iran!)
+- `PublicKey`: Cloudflare's public key (this is the standard WARP server key)
+- `Endpoint`: **YOUR_VPS_IP:443** (your relay)
+- `AllowedIPs`: `0.0.0.0/0` routes all traffic through WARP
+
+**Step 3: Import to WireGuard App**
+
+**Android:**
+1. Install [WireGuard app](https://play.google.com/store/apps/details?id=com.wireguard.android) from Play Store
+2. Open the app
+3. Tap the **+** button
+4. Choose **Create from file or archive**
+5. Select your `.conf` file
+6. Tap **Create Tunnel**
+7. Toggle ON to connect
+
+**iOS:**
+1. Install [WireGuard app](https://apps.apple.com/us/app/wireguard/id1441195209) from App Store
+2. Open the app
+3. Tap the **+** button
+4. Choose **Create from file or archive**
+5. Select your `.conf` file (share from Files app)
+6. Tap **Save**
+7. Toggle ON to connect
+
+**Alternative: QR Code Method**
+
+Generate QR code on your computer:
+```bash
+# Install qrencode
+sudo apt install qrencode
+
+# Generate QR code from config
+qrencode -t ansiutf8 < your-config.conf
+
+# Or save as image
+qrencode -o warp-config.png -r your-config.conf
+```
+
+Then scan with WireGuard app → **Create from QR code**
+
+#### **Important Limitations**
+
+When using WireGuard app instead of Cloudflare One Agent:
+
+✅ **What Works:**
+- Internet traffic goes through WARP
+- Bypasses ISP filtering via your VPS relay
+- Split tunneling (via AllowedIPs configuration)
+- Full WireGuard protocol control
+
+❌ **What Doesn't Work:**
+- **Cloudflare Zero Trust device posture checks**
+- **Automatic policy updates** from Zero Trust dashboard
+- **Gateway DNS filtering** (unless you manually set DNS)
+- **Browser-based Cloudflare Access** authentication might have issues
+
+**For SSH/VNC Access:**
+You'll still need to authenticate via browser. The WireGuard tunnel provides connectivity, but Access apps require authentication through Cloudflare's identity provider.
+
+#### **Verify It's Working**
 
 On your device:
 ```bash
-# Check WARP connection status (Windows: warp-cli.exe)
+# Check connection status
 warp-cli status
 
-# Check settings
-warp-cli settings
+# Should show "Connected" and using your custom endpoint
+warp-cli settings | grep endpoint
 ```
 
 On your VPS:
 ```bash
-# Check cloudflared logs to see WARP connections
-sudo journalctl -u cloudflared -f
+# Monitor relay traffic
+sudo journalctl -u warp-relay -f
+
+# Check if socat is running
+sudo systemctl status warp-relay
 ```
 
-You should see WARP routing traffic being handled by your tunnel.
+#### **Troubleshooting**
 
-**Note for Organizations:**
-- To deploy this setting to multiple devices, use an enterprise MDM solution (Intune, JAMF, etc.)
-- The setting is not available in Cloudflare Zero Trust dashboard
-- Local MDM files override dashboard settings by design
+**If connection still fails after all steps:**
 
-**Documentation Reference:**
-- [MDM Deployment Parameters - override_warp_endpoint](https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/warp/deployment/mdm-deployment/parameters/#override_warp_endpoint)
+Your ISP may be blocking the **WireGuard protocol fingerprint** itself (not just IPs). In this case:
+
+1. The official Cloudflare One Agent won't work (doesn't support fragmentation/obfuscation)
+2. You need to extract your Zero Trust private key and use a client that supports protocol obfuscation
+3. Alternative clients: Nekobox, v2rayNG, Hiddify (with WireGuard + fragment support)
+
+**Extract Private Key (Advanced):**
+```bash
+# On Linux
+warp-cli registration show | grep private_key
+
+# The private key can be imported into clients that support WireGuard fragmentation
+```
+
+#### **Alternative: L2TP for Specific Apps**
+
+If WARP custom endpoint doesn't work reliably, use the L2TP VPN setup (already configured in Part 2) for specific applications within VNC sessions. See section 3.3.
 
 ---
 
@@ -490,6 +600,8 @@ sudo ./setup_ws.sh
 3. Sets up L2TP/IPsec for VPN_APPS routing in VNC sessions
 4. Creates VNC servers for each user
 5. Installs cloudflared and configures Cloudflare Access with WARP routing
+6. Sets up WARP UDP relay (socat) to bypass ISP filtering (if WARP_ROUTING_ENABLED=true)
+7. Configures secure firewall (blocks direct SSH/VNC, forces Cloudflare tunnel)
 
 **Duration**: 10-15 minutes depending on VPS speed.
 
@@ -833,6 +945,62 @@ A: 22 (SSH), VNC ports (5910-591x), and optionally L2TP ports (500, 1701, 4500/u
 5. ✅ Test VPN connection and verify exit IP
 6. ✅ Connect to VNC desktops
 7. ✅ Read security best practices above
+
+---
+
+## Quick Reference: WARP Custom Endpoint Setup
+
+### For Desktop (Linux/macOS/Windows)
+
+```bash
+# Set custom endpoint
+warp-cli registration set-custom-endpoint YOUR_VPS_IP:443
+
+# Verify
+warp-cli registration show
+
+# Connect
+warp-cli connect
+```
+
+### For Android/iOS - Option 1: Deep Link
+
+Open browser and navigate to:
+```
+com.cloudflare.1dot1dot1dot1://v1/set-endpoint?address=YOUR_VPS_IP:443
+```
+
+### For Android/iOS - Option 2: WireGuard App
+
+**Extract config on Linux/Mac:**
+```bash
+warp-cli registration show  # Copy the Private Key
+```
+
+**Create `warp.conf`:**
+```ini
+[Interface]
+PrivateKey = YOUR_PRIVATE_KEY_FROM_ABOVE
+Address = 172.16.0.2/32
+DNS = 1.1.1.1
+MTU = 1280
+
+[Peer]
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+AllowedIPs = 0.0.0.0/0
+Endpoint = YOUR_VPS_IP:443
+PersistentKeepalive = 25
+```
+
+**Import:** WireGuard app → + → Create from file/QR code
+
+### Dashboard MTU Fix (Critical!)
+
+Cloudflare Zero Trust Dashboard:
+1. Settings → WARP Client → Device settings
+2. Manage → Default profile
+3. Set MTU = **1280**
+4. Save
 
 ---
 
