@@ -262,21 +262,21 @@ To access SSH and VNC through Cloudflare, install the Cloudflare One Agent:
 
 ### 1.8 Configure Custom WARP Endpoint (Bypass Iran Filtering)
 
-If you're in a region where Cloudflare IPs are filtered (like Iran), configure a custom WARP endpoint to route connections through your VPS tunnel using MDM deployment.
+> ⚠️ **Important**: Cloudflare does not provide a dashboard setting to configure custom WARP endpoints organization-wide. This must be configured on each client device using local configuration files.
+
+If you're in a region where Cloudflare IPs are filtered (like Iran), you can configure each device to use your VPS as a custom WARP endpoint.
 
 **Prerequisites:**
 - VPS setup completed with WARP routing enabled (Part 2)
 - Cloudflare One Agent installed on your device
 - Your `VPS_PUBLIC_IP` from workstation.env
 
-**Deploy via MDM Configuration:**
-
-The custom WARP endpoint is configured using the `override_warp_endpoint` MDM parameter. Choose your platform:
+**Configuration Steps by Platform:**
 
 <details>
-<summary><b>Windows (MDM XML file)</b></summary>
+<summary><b>Windows</b></summary>
 
-Create or modify `mdm.xml` and deploy via your MDM solution:
+1. Create `C:\ProgramData\Cloudflare\mdm.xml` with admin privileges:
 
 ```xml
 <dict>
@@ -287,14 +287,21 @@ Create or modify `mdm.xml` and deploy via your MDM solution:
 </dict>
 ```
 
-Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
+2. Replace:
+   - `your-team-name` with your Cloudflare Zero Trust team name
+   - `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address
+
+3. Restart Cloudflare WARP service:
+```powershell
+Restart-Service "Cloudflare WARP"
+```
 
 </details>
 
 <details>
-<summary><b>macOS (plist file)</b></summary>
+<summary><b>macOS</b></summary>
 
-Create or modify `/Library/Managed Preferences/com.cloudflare.warp.plist`:
+1. Create `/Library/Application Support/Cloudflare/mdm.xml` with admin privileges:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -309,23 +316,31 @@ Create or modify `/Library/Managed Preferences/com.cloudflare.warp.plist`:
 </plist>
 ```
 
-Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
+2. Replace:
+   - `your-team-name` with your Cloudflare Zero Trust team name
+   - `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address
+
+3. Restart WARP:
+```bash
+sudo launchctl stop com.cloudflare.1dot1dot1dot1.macos-loginlauncherapp
+sudo launchctl start com.cloudflare.1dot1dot1dot1.macos-loginlauncherapp
+```
 
 </details>
 
 <details>
 <summary><b>Linux</b></summary>
 
-Use the `warp-cli` command to set the override endpoint:
+Use the `warp-cli` command:
 
 ```bash
 # Set custom endpoint
-warp-cli override set warp-endpoint YOUR_VPS_PUBLIC_IP:7844
+sudo warp-cli override set warp-endpoint YOUR_VPS_PUBLIC_IP:7844
 
 # Verify the setting
 warp-cli override show
 
-# Register with your organization
+# If not already registered, register with your organization
 warp-cli registration new
 
 # Connect
@@ -333,6 +348,15 @@ warp-cli connect
 ```
 
 Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
+
+</details>
+
+<details>
+<summary><b>Android/iOS</b></summary>
+
+Mobile devices require MDM (Mobile Device Management) to configure custom endpoints. If you don't have enterprise MDM:
+
+**Alternative**: Use manual VPN configuration (not WARP-based) or consider other solutions for mobile devices.
 
 </details>
 
@@ -346,10 +370,11 @@ Replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
 
 On your device:
 ```bash
-# Check WARP connection status
+# Check WARP connection status (Windows: warp-cli.exe)
 warp-cli status
 
-# Should show connected and using your custom endpoint
+# Check settings
+warp-cli settings
 ```
 
 On your VPS:
@@ -359,6 +384,11 @@ sudo journalctl -u cloudflared -f
 ```
 
 You should see WARP routing traffic being handled by your tunnel.
+
+**Note for Organizations:**
+- To deploy this setting to multiple devices, use an enterprise MDM solution (Intune, JAMF, etc.)
+- The setting is not available in Cloudflare Zero Trust dashboard
+- Local MDM files override dashboard settings by design
 
 **Documentation Reference:**
 - [MDM Deployment Parameters - override_warp_endpoint](https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/warp/deployment/mdm-deployment/parameters/#override_warp_endpoint)
