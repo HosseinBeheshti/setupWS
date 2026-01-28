@@ -5,7 +5,7 @@
 # Purpose: Route specific VPN_APPS through L2TP in VNC sessions
 # Usage: Called by setup_ws.sh during initial setup
 #        Use ./run_vpn.sh in VNC sessions to activate L2TP
-# Note: WireGuard is a separate independent VPN service for client devices
+# Note: L2TP is only for app-specific routing in VNC sessions
 
 # Exit on any error
 set -e
@@ -227,7 +227,7 @@ print_message "=== L2TP/IPsec VPN Setup Complete ==="
 echo ""
 echo -e "${GREEN}Setup completed successfully!${NC}"
 echo -e "To route VPN_APPS through L2TP, run: ${GREEN}sudo ./run_vpn.sh${NC} in your VNC session"
-echo -e "${YELLOW}Note:${NC} WireGuard is a separate independent VPN service for client devices"
+echo -e "${YELLOW}Note:${NC} L2TP is only for app-specific routing in VNC sessions"
 echo ""
 echo -e "${YELLOW}Configuration:${NC}"
 echo -e "  Server: $L2TP_SERVER_IP"

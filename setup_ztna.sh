@@ -6,7 +6,8 @@
 # This script configures Cloudflare Access for SSH and VNC connections:
 # - Installs cloudflared (Cloudflare Tunnel)
 # - Configures tunnel for SSH/VNC access (NO traffic routing)
-# - Opens firewall ports for WireGuard and L2TP (direct VPS access)
+# - Enables WARP routing for custom endpoint (bypass filtering)
+# - Opens firewall ports for L2TP (direct VPS access)
 # - Starts cloudflared as system service
 #
 # Prerequisites:
@@ -100,11 +101,53 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared
 CLOUDFLARED_VERSION=$(cloudflared --version 2>&1 | head -1)
 print_message "✓ cloudflared installed: $CLOUDFLARED_VERSION"
 
-# 4. Install cloudflared service with tunnel token
-print_message "Installing cloudflared service with tunnel token..."
-cloudflared service install "$CLOUDFLARE_TUNNEL_TOKEN"
+# 4. Extract tunnel credentials from token
+print_message "Extracting tunnel credentials from token..."
+mkdir -p /root/.cloudflared
+mkdir -p /etc/cloudflared
 
-print_message "✓ cloudflared service installed"
+# Decode the token to get tunnel ID
+TUNNEL_ID=$(echo "$CLOUDFLARE_TUNNEL_TOKEN" | base64 -d 2>/dev/null | grep -o '"t":"[^"]*"' | cut -d'"' -f4)
+if [[ -z "$TUNNEL_ID" ]]; then
+    print_error "Failed to extract tunnel ID from token"
+    exit 1
+fi
+
+print_message "Tunnel ID: $TUNNEL_ID"
+
+# 5. Create cloudflared config file with WARP routing
+print_message "Creating cloudflared configuration with WARP routing..."
+cat > /etc/cloudflared/config.yml <<EOF
+tunnel: $TUNNEL_ID
+credentials-file: /root/.cloudflared/$TUNNEL_ID.json
+
+# Enable WARP routing for custom endpoint (bypass Iran filtering)
+warp-routing:
+  enabled: ${WARP_ROUTING_ENABLED:-true}
+
+# Ingress rules are managed via Cloudflare dashboard
+ingress:
+  - service: http_status:404
+EOF
+
+# 6. Create credentials file from token
+print_message "Creating tunnel credentials file..."
+echo "$CLOUDFLARE_TUNNEL_TOKEN" | base64 -d > /root/.cloudflared/$TUNNEL_ID.json 2>/dev/null || {
+    # Fallback: install with token first to get credentials
+    print_message "Using fallback method to extract credentials..."
+    cloudflared service install "$CLOUDFLARE_TUNNEL_TOKEN" 2>/dev/null || true
+    systemctl stop cloudflared 2>/dev/null || true
+    # Find and use the generated credentials
+    if [[ -f /etc/cloudflared/cert.json ]]; then
+        cp /etc/cloudflared/cert.json /root/.cloudflared/$TUNNEL_ID.json
+    fi
+}
+
+# 7. Install cloudflared service with config file
+print_message "Installing cloudflared service with config..."
+cloudflared --config /etc/cloudflared/config.yml service install
+
+print_message "✓ cloudflared service installed with WARP routing enabled"
 
 # Step 3: Start cloudflared Service
 print_header "Step 3/4: Starting cloudflared Service"
@@ -148,12 +191,19 @@ echo -e "${GREEN}Cloudflare Zero Trust Access successfully configured!${NC}\n"
 
 echo -e "${YELLOW}Installed & Configured:${NC}"
 echo -e "  ✓ cloudflared tunnel (for SSH/VNC access)"
+if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
+    echo -e "  ✓ WARP routing enabled (custom endpoint on port ${WARP_ROUTING_PORT})"
+fi
 echo -e "  ✓ Firewall will be configured by setup_ws.sh"
 echo ""
 
 echo -e "${CYAN}Service Status:${NC}"
 echo -e "  cloudflared: ${GREEN}$(systemctl is-active cloudflared)${NC}"
 echo -e "  Tunnel Name: ${GREEN}$TUNNEL_NAME${NC}"
+if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
+    echo -e "  WARP Routing: ${GREEN}Enabled${NC}"
+    echo -e "  WARP Port: ${GREEN}${WARP_ROUTING_PORT}${NC}"
+fi
 echo ""
 
 echo -e "${YELLOW}Important Security Note:${NC}"
@@ -176,11 +226,18 @@ echo -e "3. ${BLUE}Verify Tunnel Connection:${NC}"
 echo -e "   ${CYAN}sudo systemctl status cloudflared${NC}"
 echo -e "   ${CYAN}sudo journalctl -u cloudflared -n 20${NC}"
 echo ""
-echo -e "   ${YELLOW}Note:${NC} Token-based tunnels don't support 'cloudflared tunnel info' command"
+echo -e "   ${YELLOW}Note:${NC} Config-based tunnels with WARP routing enabled"
 echo -e "   Check the Cloudflare dashboard (Networks → Tunnels) to verify connection"
 echo ""
-echo -e "4. ${BLUE}VPN Access (Direct, bypass Cloudflare):${NC}"
-echo -e "   - WireGuard: Connect using client configs in /etc/wireguard/clients/"
+if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
+echo -e "4. ${BLUE}Configure Custom WARP Endpoint (For Iran/Filtered Regions):${NC}"
+echo -e "   - Go to: Settings → WARP Client → Device settings"
+echo -e "   - Add custom endpoint: ${GREEN}$VPS_PUBLIC_IP:${WARP_ROUTING_PORT}${NC}"
+echo -e "   - This allows Cloudflare One Agent to connect via your VPS"
+echo -e "   - See README.md section 1.8 for detailed instructions"
+echo ""
+fi
+echo -e "5. ${BLUE}VPN Access (Direct, bypass Cloudflare):${NC}"
 echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC} in VNC sessions"
 echo ""
 

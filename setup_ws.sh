@@ -8,8 +8,7 @@
 # 2. Run setup_virtual_router.sh
 # 3. Run setup_l2tp.sh (always installed for VPN_APPS)
 # 4. Run setup_vnc.sh
-# 5. Run setup_wg.sh (always installed for client VPN service)
-# 6. Run setup_ztna.sh
+# 5. Run setup_ztna.sh
 #
 # Run with: sudo ./setup_ws.sh
 # ============================================================
@@ -47,7 +46,7 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_wg.sh" "setup_ztna.sh")
+REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
@@ -62,8 +61,10 @@ print_header "Starting Secure Remote Access Gateway Setup"
 echo -e "${CYAN}Configuration:${NC}"
 echo -e "  VPS IP: ${GREEN}${VPS_PUBLIC_IP:-auto-detect}${NC}"
 echo -e "  VNC Users: ${GREEN}$VNC_USER_COUNT${NC}"
-echo -e "  WireGuard Port: ${GREEN}${WG_SERVER_PORT:-51820}${NC}"
 echo -e "  L2TP Apps: ${GREEN}${VPN_APPS:-none}${NC}"
+if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
+    echo -e "  WARP Endpoint: ${GREEN}Enabled (Port ${WARP_ROUTING_PORT})${NC}"
+fi
 echo ""
 
 # ============================================================
@@ -130,14 +131,7 @@ if [[ -n "$VPN_APPS" ]]; then
                 ;;
         esac
     done
-fi
-
-# WireGuard packages (from setup_wg.sh)
-print_message "Installing WireGuard VPN..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    wireguard \
-    wireguard-tools \
-    qrencode
+fi  qrencode
 
 # UFW firewall
 print_message "Installing UFW firewall..."
@@ -242,17 +236,7 @@ fi
 print_message "✓ VNC Server configured"
 echo ""
 
-# 5.4: Setup WireGuard VPN
-print_message "--- Running setup_wg.sh ---"
-./setup_wg.sh
-if [[ $? -ne 0 ]]; then
-    print_error "WireGuard setup failed!"
-    exit 1
-fi
-print_message "✓ WireGuard VPN configured"
-echo ""
-
-# 5.5: Setup Cloudflare Zero Trust Access
+# 5.4: Setup Cloudflare Zero Trust Access
 print_message "--- Running setup_ztna.sh ---"
 ./setup_ztna.sh
 if [[ $? -ne 0 ]]; then
@@ -277,15 +261,13 @@ ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 
-# Allow only WireGuard VPN
-ufw allow ${WG_SERVER_PORT:-51820}/udp comment 'WireGuard VPN'
-print_message "  ✓ WireGuard port ${WG_SERVER_PORT:-51820}/udp allowed"
+# Allow WARP routing port (for custom endpoint to bypass filtering)
+if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
+    ufw allow ${WARP_ROUTING_PORT:-7844}/udp comment 'Cloudflare WARP Endpoint'
+    print_message "  ✓ WARP endpoint port ${WARP_ROUTING_PORT:-7844}/udp allowed"
+fi
 
-# Allow L2TP/IPsec VPN
-if [[ " $VPN_LIST " =~ " l2tp " ]]; then
-    ufw allow 500/udp comment 'IPsec'
-    ufw allow 1701/udp comment 'L2TP'
-    ufw allow 4500/udp comment 'IPsec NAT-T'
+# Allow allow 4500/udp comment 'IPsec NAT-T'
     print_message "  ✓ L2TP/IPsec ports allowed"
 fi
 
@@ -308,9 +290,11 @@ echo -e "  ✓ Core system utilities and networking tools"
 echo -e "  ✓ Docker Engine and Docker Compose"
 echo -e "  ✓ VS Code and Google Chrome"
 echo -e "  ✓ VNC Server with $VNC_USER_COUNT user(s)"
-echo -e "  ✓ WireGuard VPN Server (for client devices)"
 echo -e "  ✓ L2TP/IPsec VPN (for VPN_APPS in VNC sessions)"
 echo -e "  ✓ Cloudflare Zero Trust Access (SSH/VNC)"
+if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
+    echo -e "  ✓ Cloudflare WARP Custom Endpoint (bypass filtering)"
+fi
 echo -e "  ✓ Virtual Router for VPN traffic"
 echo ""
 
@@ -339,37 +323,21 @@ for ((i=1; i<=VNC_USER_COUNT; i++)); do
 done
 
 echo -e "-----------------------------------------------------"
-echo ""
-
-# Display WireGuard details
-echo -e "${CYAN}WireGuard VPN Details:${NC}"
-echo -e "-----------------------------------------------------"
-echo -e "  ${GREEN}Server IP:${NC}    $VPS_PUBLIC_IP"
-echo -e "  ${GREEN}VPN Port:${NC}     ${WG_SERVER_PORT}"
-echo -e "  ${GREEN}Management:${NC}   Use ./manage_wg_client.sh"
-echo -e "-----------------------------------------------------"
-echo ""
-
 echo -e "${YELLOW}Next Steps:${NC}"
 echo -e ""
 echo -e "1. ${BLUE}Connect to VNC:${NC}"
-echo -e "   Use the connection details above with your VNC client"
+echo -e "   Use Cloudflare Access: ${CYAN}https://vnc-<user>.yourteam.cloudflareaccess.com${NC}"
 echo -e ""
-echo -e "2. ${BLUE}Add WireGuard clients:${NC}"
-echo -e "   ${CYAN}sudo ./manage_wg_client.sh add laptop${NC}"
-echo -e "   ${CYAN}sudo ./manage_wg_client.sh add phone${NC}"
+echo -e "2. ${BLUE}Configure WARP Custom Endpoint (if in filtered region):${NC}"
+echo -e "   - Dashboard: Settings → WARP Client → Device settings"
+echo -e "   - Add endpoint: ${GREEN}$VPS_PUBLIC_IP:${WARP_ROUTING_PORT:-7844}${NC}"
+echo -e "   - See README.md section 1.8 for details"
 echo -e ""
-echo -e "3. ${BLUE}Test WireGuard VPN:${NC}"
-echo -e "   - Connect with WireGuard client"
-echo -e "   - Verify exit IP: ${CYAN}curl ifconfig.me${NC}"
-echo -e "   - Should show: ${GREEN}$VPS_PUBLIC_IP${NC}"
-echo -e ""
-echo -e "4. ${BLUE}Use L2TP for VPN_APPS (in VNC session):${NC}"
+echo -e "3. ${BLUE}Use L2TP for VPN_APPS (in VNC session):${NC}"
 echo -e "   Run: ${CYAN}sudo ./run_vpn.sh${NC}"
 echo -e "   Routes apps: ${GREEN}$VPN_APPS${NC}"
 echo -e ""
-echo -e "5. ${BLUE}Monitor services:${NC}"
-echo -e "   - WireGuard: ${CYAN}sudo wg show${NC}"
+echo -e "4. ${BLUE}Monitor services:${NC}"
 echo -e "   - VNC: ${CYAN}systemctl status vncserver-<username>@<display>${NC}"
 echo -e "   - Cloudflare: ${CYAN}systemctl status cloudflared${NC}"
 echo -e ""

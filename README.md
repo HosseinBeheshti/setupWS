@@ -1,51 +1,47 @@
-# Secure Remote Access Gateway with WireGuard VPN
+# Secure Remote Access Gateway with Cloudflare Zero Trust
 
-**Hybrid secure access solution combining WireGuard VPN for clients with L2TP for app-specific routing in VNC sessions, all managed through Cloudflare Zero Trust Access.**
+**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access with L2TP for app-specific routing in VNC sessions, and WARP custom endpoint to bypass ISP filtering.**
 
 ---
 
 ## Architecture Overview
 
-This setup provides two VPN services and zero-trust access control:
+This setup provides secure remote access with zero-trust control:
 
-- **WireGuard VPN**: Independent VPN service for client devices (all traffic)
-- **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 - **Cloudflare Zero Trust**: Identity-aware SSH/VNC access management
+- **Cloudflare WARP**: Custom endpoint through VPS tunnel (bypasses ISP filtering)
+- **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                    CLIENT DEVICES                          │
-│  ┌──────────────────────┐    ┌──────────────────────────┐  │
-│  │   WireGuard VPN      │    │  Cloudflare One Agent    │  │
-│  │  (All Traffic)       │    │  (SSH/VNC Access)        │  │
-│  └──────────┬───────────┘    └───────────┬──────────────┘  │
-└─────────────┼────────────────────────────┼─────────────────┘
-              │                            │
-              │ Encrypted Tunnel           │ via Cloudflare Edge Network
-              │ Port 51820/udp             │ (Zero Trust Access)
-              │                            │
-              ▼                            ▼
-       ┌──────────────┐            ┌─────────────────┐
-       │   Internet   │            │ Cloudflare Edge │
-       │      via     │            │   (Global CDN)  │
-       │ VPS_PUBLIC_IP│            └────────┬────────┘
-       └──────────────┘                     │
-              ▲                             │ Secure Tunnel
-              │                             ▼
-┌─────────────┴─────────────────────────────┴─────────────────┐
+│                  ┌──────────────────────────────┐          │
+│                  │  Cloudflare One Agent        │          │
+│                  │  (SSH/VNC Access + WARP)     │          │
+│                  └───────────┬──────────────────┘          │
+└──────────────────────────────┼─────────────────────────────┘
+                               │
+                               │ via Cloudflare Edge Network
+                               │ (Zero Trust Access + WARP)
+                               │
+              ┌────────────────▼────────────┐
+              │   Cloudflare Edge Network   │
+              │      (Global CDN)           │
+              └────────────┬────────────────┘
+                           │ Secure Tunnel
+                           ▼
+┌──────────────────────────┴──────────────────────────────────┐
 │                         VPS SERVER                          │
-│  ┌─────────────────────┐       ┌──────────────────────┐     │
-│  │  WireGuard          │       │  cloudflared         │     │
-│  │  (wg0)              │       │  Tunnel Service      │     │
-│  │  10.8.0.1/24        │       │  (Port 22, 5910+)    │     │
-│  |  Routes to Internet |       └──────────┬───────────┘     │
-│  |  NAT/Masquerade     |                  |                 │
-│  └─────────────────────┘                  |                 |
-│                                           │                 │
-│                                           ▼                 │
+│            ┌──────────────────────┐                         │
+│            │  cloudflared         │                         │
+│            │  Tunnel Service      │                         │
+│            │  (SSH/VNC + WARP)    │                         │
+│            └──────────┬───────────┘                         │
+│                       │                                     │
+│                       ▼                                     │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │            VNC SESSIONS (Desktop Access)              │  │
-│  │            - Accessed via Cloudflare Edge             │  │
+│  │            - Accessed via Cloudflare Access           │  │
 │  │            - Users: alice, bob, etc.                  │  │
 │  │            - Ports: 5910, 5911, 5912...               │  │
 │  │                                                       │  │
@@ -63,17 +59,16 @@ This setup provides two VPN services and zero-trust access control:
 └─────────────────────────────────────────────────────────────┘
 
 TRAFFIC FLOWS:
-1. WireGuard VPN:  Client → VPS (encrypted) → Internet (exits as VPS_PUBLIC_IP)
-2. VNC/SSH Access: Client → Cloudflare Edge → cloudflared → VNC/SSH on VPS
+1. SSH/VNC Access: Client → Cloudflare Edge → cloudflared → SSH/VNC on VPS
+2. WARP Endpoint:  Client WARP → VPS:7844 → Cloudflare (bypasses filtering)
 3. L2TP in VNC:    VNC Session Apps → L2TP Server (routes specific VPN_APPS)
 ```
 
 ### What You Get
 
-- ✅ **WireGuard VPN** - Independent VPN service for client devices (full tunnel)
-- ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions (VPN_APPS)
-- ✅ **Cloudflare Access** - Identity-aware SSH/VNC access (Gmail + OTP)
-- ✅ **Zero Trust Security** - Policy-based access control for management
+- ✅ **Cloudflare Zero Trust** - Identity-aware SSH/VNC access (Gmail + OTP)
+- ✅ **Cloudflare WARP Custom Endpoint** - Bypass ISP filtering via VPS tunnel
+- ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions
 - ✅ **Multiple VNC Users** - Individual desktop sessions per user
 - ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
 
@@ -84,12 +79,12 @@ TRAFFIC FLOWS:
 - **VPS**: Ubuntu 24.04 with public IP
 - **Cloudflare Account**: Free tier (for Zero Trust Access)
 - **Email**: Gmail address for authentication
-- **Clients**: WireGuard client apps for VPN, Cloudflare One Agent for SSH/VNC
+- **Clients**: client apps for VPN, Cloudflare One Agent for SSH/VNC
 
 ---
 
 ## Part 1: Cloudflare Zero Trust Setup (Dashboard Configuration)
-
+Cloudflare One Agent for SSH/VNC access
 ### 1.1 Configure Identity Provider
 
 Set up authentication method for your users:
@@ -127,7 +122,7 @@ Note: include this policy in the **Device enrollment permissions**
 1. Go to: **Networks → Connectors → Cloudflare Tunnels**
 2. Click **Create a tunnel**
 3. Select **Cloudflared** (NOT WARP Connector)
-4. **Tunnel name**: `vps-tunnel` (or any name you prefer)
+4. **Tunnel name**: `vps-access`
 5. Click **Save tunnel**
 6. Select **Linux** as the operating system
 7. You'll see installation commands - **copy the token** from the command
@@ -198,7 +193,7 @@ Now connect your tunnel to the applications you created:
    - **Subdomain**: `vnc1-vps` (for first VNC user)
    - **Domain**: Select your team domain
    - **Path**: Leave empty
-   - **Type**: `HTTP`
+   - **Type**: `TCP`
    - **URL**: `localhost:5910` (port 5910 for first user, 5911 for second, etc.)
    - Click **Save hostname**
 
@@ -265,7 +260,49 @@ To access SSH and VNC through Cloudflare, install the Cloudflare One Agent:
 
 ---
 
-### 1.8 Test Cloudflare Access Setup (After VPS Setup)
+### 1.8 Configure Custom WARP Endpoint (Bypass Iran Filtering)
+
+If you're in a region where Cloudflare IPs are filtered (like Iran), configure a custom WARP endpoint to route connections through your VPS tunnel:
+
+**In Cloudflare Zero Trust Dashboard:**
+
+1. Go to: **Settings → WARP Client → Device settings**
+2. Click **Manage** on your device profile (or create a new profile)
+3. Scroll down to **Gateway with WARP settings**
+4. Find **Custom endpoint** section
+5. Click **Add endpoint**
+6. Configure endpoint:
+   - **Endpoint IPv4**: Enter your `VPS_PUBLIC_IP` (from workstation.env)
+   - **Endpoint UDP Port**: `7844` (default WARP routing port)
+   - **Name**: `VPS Custom Endpoint` (descriptive name)
+7. Click **Save**
+8. Make sure this profile is assigned to your devices
+
+**On Your Device:**
+
+1. Open Cloudflare One Agent
+2. Go to **Settings → Preferences → Account**
+3. Verify your device profile has the custom endpoint enabled
+4. Disconnect and reconnect the WARP connection
+5. Check connection is working
+
+**How It Works:**
+- Cloudflare One Agent connects to your VPS IP on port 7844 (UDP)
+- Your VPS tunnel forwards the WARP traffic to Cloudflare's edge network
+- This bypasses local ISP filtering of Cloudflare's default IPs
+- All SSH/VNC access still works through the secure tunnel
+
+**Verify It's Working:**
+```bash
+# Check cloudflared logs on VPS to see WARP connections
+sudo journalctl -u cloudflared -f
+```
+
+You should see WARP routing traffic being handled by your tunnel.
+
+---
+
+### 1.9 Test Cloudflare Access Setup (After VPS Setup)
 
 After completing VPS setup in Part 2, test your access:
 
@@ -320,10 +357,7 @@ TUNNEL_NAME="vps-tunnel"                 # ← Match tunnel name from Part 1.3
 # VPS Information
 VPS_PUBLIC_IP="1.2.3.4"                  # ← Your VPS public IP
 
-# WireGuard VPN Configuration
-WG_SERVER_PORT="51820"
-WG_SERVER_ADDRESS="10.8.0.1/24"
-WG_CLIENT_DNS="1.1.1.1, 1.0.0.1"
+# VPN Configuration
 
 # VNC Users (configure at least one)
 VNCUSER1_USERNAME='alice'
@@ -358,12 +392,11 @@ sudo ./setup_ws.sh
 ```
 
 **What this does:**
-1. Installs all required packages (VNC, WireGuard, L2TP, Docker, VS Code, Chrome, etc.)
+1. Installs all required packages (VNC, L2TP, Docker, VS Code, Chrome, etc.)
 2. Configures virtual router for VPN traffic
 3. Sets up L2TP/IPsec for VPN_APPS routing in VNC sessions
 4. Creates VNC servers for each user
-5. Installs and configures WireGuard VPN server (clients managed separately)
-6. Installs cloudflared and configures Cloudflare Access
+5. Installs cloudflared and configures Cloudflare Access with WARP routing
 
 **Duration**: 10-15 minutes depending on VPS speed.
 
@@ -373,83 +406,7 @@ sudo ./setup_ws.sh
 
 ## Part 3: Client Setup
 
-### 3.1 Add and Configure WireGuard Clients
-
-**Interactive Menu (Recommended):**
-
-```bash
-sudo ./manage_wg_client.sh
-```
-
-This will show an interactive menu:
-```
-1. List all clients
-2. Add new client
-3. Remove client
-4. Show client configuration
-5. Show QR code for client
-6. Show WireGuard status
-0. Exit
-```
-
-**Or use direct commands:**
-
-```bash
-# Add clients
-sudo ./manage_wg_client.sh add laptop
-sudo ./manage_wg_client.sh add phone
-
-# List all clients
-sudo ./manage_wg_client.sh list
-
-# Show QR code for mobile device
-sudo ./manage_wg_client.sh qr phone
-
-# Show client configuration
-sudo ./manage_wg_client.sh show laptop
-
-# Remove a client
-sudo ./manage_wg_client.sh remove old-device
-```
-
----
-
-### 3.2 Connect via WireGuard VPN
-
-**Desktop Clients (Linux/Mac/Windows):**
-
-1. **Install WireGuard**:
-   - Linux: `sudo apt install wireguard`
-   - Mac/Windows: Download from [wireguard.com](https://www.wireguard.com/install/)
-
-2. **Copy client configuration from VPS**:
-   ```bash
-   scp root@YOUR_VPS_IP:/etc/wireguard/clients/laptop.conf ~/
-   ```
-
-3. **Import configuration**:
-   - Linux/Mac: `sudo wg-quick up ~/laptop.conf`
-   - Windows/Mac GUI: Import `laptop.conf` file
-
-4. **Verify connection**:
-   ```bash
-   curl ifconfig.me
-   # Should show your VPS IP
-   ```
-
-**Mobile Clients (iOS/Android):**
-
-1. **Install WireGuard app** from App Store/Play Store
-2. **Generate QR code on VPS**:
-   ```bash
-   sudo ./manage_wg_client.sh qr phone
-   ```
-3. **Scan QR code** in WireGuard app
-4. **Connect** and verify IP
-
----
-
-### 3.3 Connect to VNC Desktop
+### 3.1 Connect to VNC Desktop
 
 **Via Cloudflare Access (Required):**
 
@@ -474,7 +431,7 @@ cloudflared access tcp --hostname vnc1-vps.yourteam.cloudflareaccess.com --url l
 
 ---
 
-### 3.4 Access via SSH
+### 3.2 Access via SSH
 
 **Via Cloudflare Access (Required):**
 
@@ -499,7 +456,7 @@ Then connect with: `ssh vps-ssh`
 
 ---
 
-### 3.5 Use L2TP for VPN_APPS in VNC Sessions
+### 3.3 Use L2TP for VPN_APPS in VNC Sessions
 
 L2TP is configured to route specific applications through a remote VPN.
 This is useful when working in a VNC session and need certain apps routed.
@@ -514,24 +471,24 @@ This will:
 - Route traffic from VPN_APPS (e.g., xrdp, remmina) through L2TP
 - Keep other VNC session traffic using normal routing
 
-**Note:** WireGuard is a separate independent VPN service for your client devices.
+**Note:** is a separate independent VPN service for your client devices.
 L2TP is only for routing specific apps in VNC sessions.
 
 ---
 
 ## Part 4: Verification
 
-### 4.1 Verify WireGuard VPN
+### 4.1 Verify VPN
 
 **On VPS:**
 ```bash
-# Check WireGuard status
+# Check status
 sudo wg show
 
 # Should show:
-# interface: wg0
+# interface: 
 #   public key: ...
-#   listening port: 51820
+#   listening port: 
 #   peer: (client public key)
 #     allowed ips: 10.8.0.2/32
 #     latest handshake: X seconds ago
@@ -544,46 +501,13 @@ curl ifconfig.me
 
 # Check VPN interface
 ip addr show  # Linux/Mac
-# Look for wg0 or utun interface with 10.8.0.x IP
+# Look for  or utun interface with 10.8.0.x IP
 ```
 
 ---
 
-### 4.2 WireGuard Client Management
-
-**Interactive menu:**
-
-```bash
-sudo ./manage_wg_client.sh
-```
-
-Select from the menu to manage clients easily.
-
-**Direct commands:**
-
-```bash
-# List all clients and their connection status
-sudo ./manage_wg_client.sh list
-
-# Add a new client
-sudo ./manage_wg_client.sh add tablet
-
-# Show client configuration file
-sudo ./manage_wg_client.sh show tablet
-
-# Generate/show QR code for mobile
-sudo ./manage_wg_client.sh qr tablet
-
-# Remove a client
-sudo ./manage_wg_client.sh remove old-laptop
-
-# Check active connections
-sudo wg show
-```
-
----
-
-### 4.3 Verify VNC Access
+### 4.2 Client Management
+### 4.2 Verify VNC Access
 
 ```bash
 # On VPS - check VNC services
@@ -596,7 +520,7 @@ Connect via VNC client to verify desktop access.
 
 ---
 
-### 4.4 Verify Cloudflare Tunnel
+### 4.3 Verify Cloudflare Tunnel
 
 ```bash
 # On VPS
@@ -628,32 +552,7 @@ sudo journalctl -u cloudflared -n 20
 
 ## Troubleshooting
 
-### WireGuard Issues
-
-**VPN not connecting:**
-```bash
-# On VPS - check WireGuard service
-sudo systemctl status wg-quick@wg0
-sudo journalctl -u wg-quick@wg0 -n 50
-
-# Check firewall
-sudo ufw status
-# Port 51820/udp should be ALLOW
-
-# Check IP forwarding
-sysctl net.ipv4.ip_forward
-# Should be: net.ipv4.ip_forward = 1
-```
-
-**Traffic not routing:**
-```bash
-# Check NAT rules
-sudo iptables -t nat -L -v -n | grep MASQUERADE
-# Should see rule for wg0 interface
-```
-
----
-
+### Issues
 ### VNC Issues
 
 **Service not starting:**
@@ -737,7 +636,7 @@ cloudflared access token -app=https://ssh-vps.yourteam.cloudflareaccess.com
 ### Check VPN Connections
 
 ```bash
-# WireGuard active connections
+# active connections
 sudo wg show
 
 # Current VPN routes
@@ -779,47 +678,23 @@ sudo journalctl -u cloudflared -n 50
 ## Security Best Practices
 
 1. **Change default passwords** in `workstation.env` before setup
-2. **Use strong WireGuard keys** (auto-generated by setup script)
+2. **Use strong keys** (auto-generated by setup script)
 3. **Restrict Cloudflare Access** policies to specific emails
 4. **Enable UFW firewall** (done automatically by setup script)
 5. **Regularly update** VPS packages: `sudo apt update && sudo apt upgrade`
 6. **Monitor logs** for suspicious activity
-7. **Backup WireGuard configs** from `/etc/wireguard/clients/`
+7. **Backup configs** from `/etc//clients/`
 
 ---
 
 ## FAQ
 
-**Q: Can I use both WireGuard and L2TP simultaneously?**  
+**Q: Can I use both L2TP simultaneously?**  
 A: Yes! They serve different purposes:
-- **WireGuard**: Independent VPN service for client devices (routes all traffic through VPS)
-- **L2TP**: Routes specific VPN_APPS in VNC sessions (run ./run_vpn.sh in VNC)
-- Use WireGuard on your laptop/phone, and L2TP in VNC for app-specific routing
-
-**Q: Which VPN should I use - WireGuard or L2TP?**  
-A: Use both for different purposes:
-- **WireGuard**: For your client devices (laptop, phone) - full VPN service
-- **L2TP**: In VNC sessions for routing specific apps (xrdp, remmina, etc.)
-
-**Q: Do I need Cloudflare One Agent for VPN?**  
-A: No. There are two separate things:
-- **WireGuard VPN**: Routes all your device traffic through VPS (shows VPS IP)
-- **Cloudflare One Agent**: Only needed for accessing SSH/VNC through Cloudflare's authenticated tunnel
-- You can use WireGuard for general VPN, and Cloudflare One Agent only when accessing your VPS management services
-
-**Q: What's the difference between WireGuard and Cloudflare One Agent?**  
-A: 
-- **WireGuard**: Your own VPN server - all traffic exits via your VPS IP
-- **Cloudflare One Agent**: Cloudflare's client for accessing self-hosted applications protected by Zero Trust Access policies
-- They serve different purposes and can be used together
-
-**Q: Why can't I SSH/VNC directly to my VPS IP?**  
-A: Direct SSH/VNC access is blocked by firewall for security. All SSH/VNC access must go through Cloudflare tunnel, which provides:
-- Identity verification (email + OTP)
 - Access policies enforcement
 - Traffic encryption and logging
 - Protection against brute-force attacks
-WireGuard and L2TP VPN ports remain open for their intended purposes.
+L2TP VPN ports remain open for their intended purposes.
 
 **Q: How do I access my VPS through Cloudflare?**  
 A: 
@@ -828,30 +703,27 @@ A:
 3. For VNC: Open browser to `https://vnc1-vps.yourteam.cloudflareaccess.com`
 4. Or use `cloudflared access tcp` to create local tunnels for any service
 
-**Q: Can I add more WireGuard clients later?**  
+**Q: Can I add more clients later?**  
 A: Yes. Use the management script:
 ```bash
-sudo ./manage_wg_client.sh add new-device-name
 ```
 You can add unlimited clients on-demand.
 
-**Q: How do I remove a WireGuard client?**  
+**Q: How do I remove a client?**  
 A: Use the management script:
 ```bash
-sudo ./manage_wg_client.sh remove device-name
 ```
 
-**Q: How do I see all my WireGuard clients?**  
+**Q: How do I see all my clients?**  
 A: Use the list command:
 ```bash
-sudo ./manage_wg_client.sh list
 ```
 
 **Q: How do I add more VNC users?**  
 A: Add `VNCUSER4_*` variables to `workstation.env`, increment `VNC_USER_COUNT`, and run `sudo ./setup_vnc.sh`.
 
 **Q: What ports are open on my VPS?**  
-A: 22 (SSH), 51820/udp (WireGuard), VNC ports (5910-591x), and optionally L2TP ports (500, 1701, 4500/udp).
+A: 22 (SSH), VNC ports (5910-591x), and optionally L2TP ports (500, 1701, 4500/udp).
 
 ---
 
@@ -864,9 +736,8 @@ A: 22 (SSH), 51820/udp (WireGuard), VNC ports (5910-591x), and optionally L2TP p
    - Add private network routes
    - Install WARP client on your devices
 2. ✅ Run `sudo ./setup_ws.sh` on VPS (Part 2)
-3. ✅ Add WireGuard clients with `sudo ./manage_wg_client.sh` (Part 3)
 4. ✅ Test Cloudflare private network access (SSH/VNC)
-5. ✅ Test WireGuard VPN connection and verify exit IP
+5. ✅ Test VPN connection and verify exit IP
 6. ✅ Connect to VNC desktops
 7. ✅ Read security best practices above
 
@@ -874,7 +745,6 @@ A: 22 (SSH), 51820/udp (WireGuard), VNC ports (5910-591x), and optionally L2TP p
 
 ## Support
 
-- **WireGuard**: https://www.wireguard.com/
 - **Cloudflare Zero Trust**: https://developers.cloudflare.com/cloudflare-one/
 - **Ubuntu Server**: https://ubuntu.com/server/docs
 
@@ -886,4 +756,4 @@ See [LICENSE](LICENSE) file.
 
 ---
 
-**Setup completed!** Enjoy your secure remote access gateway with WireGuard VPN and Cloudflare Zero Trust Access.
+**Setup completed!** Enjoy your secure remote access gateway with VPN and Cloudflare Zero Trust Access.
