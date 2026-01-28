@@ -125,7 +125,7 @@ DNS = $WG_CLIENT_DNS
 
 [Peer]
 PublicKey = $WG_SERVER_PUBLIC_KEY
-Endpoint = $VPS_PUBLIC_IP:$WG_SERVER_PORT
+Endpoint = $WG_ENDPOINT:$WG_SERVER_PORT
 AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 EOF
@@ -159,7 +159,7 @@ EOF
     echo -e "${CYAN}Public Key:${NC}      ${GREEN}$CLIENT_PUBLIC_KEY${NC}"
     echo ""
     echo -e "${YELLOW}Next Steps:${NC}"
-    echo -e "1. Copy config to client: ${CYAN}scp root@$VPS_PUBLIC_IP:/etc/wireguard/clients/${client_name}.conf .${NC}"
+    echo -e "1. Copy config to client: ${CYAN}scp root@$WG_ENDPOINT:/etc/wireguard/clients/${client_name}.conf .${NC}"
     echo -e "2. Show QR code: ${CYAN}sudo ./manage_wg_client.sh qr $client_name${NC}"
     echo ""
 }

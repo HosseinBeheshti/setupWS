@@ -77,6 +77,7 @@ fi
 
 print_header "WireGuard VPN Server Setup"
 echo -e "${CYAN}VPS IP:${NC} $VPS_PUBLIC_IP"
+echo -e "${CYAN}WireGuard Endpoint:${NC} $WG_ENDPOINT"
 echo -e "${CYAN}WireGuard Port:${NC} $WG_SERVER_PORT"
 echo -e "${CYAN}VPN Subnet:${NC} $WG_SERVER_ADDRESS"
 echo -e "${CYAN}Network Interface:${NC} $DEFAULT_INTERFACE"
@@ -179,7 +180,7 @@ echo -e "${GREEN}WireGuard VPN server successfully installed and configured!${NC
 
 echo -e "${CYAN}Server Information:${NC}"
 echo -e "  VPS IP:           ${GREEN}$VPS_PUBLIC_IP${NC}"
-echo -e "  WireGuard Port:   ${GREEN}$WG_SERVER_PORT${NC}"
+echo -e "  WG Endpoint:      ${GREEN}$WG_ENDPOINT:$WG_SERVER_PORT${NC}"
 echo -e "  VPN Subnet:       ${GREEN}$WG_SERVER_ADDRESS${NC}"
 echo -e "  Interface:        ${GREEN}wg0${NC}"
 echo -e "  Public Key:       ${GREEN}$WG_SERVER_PUBLIC_KEY${NC}"
