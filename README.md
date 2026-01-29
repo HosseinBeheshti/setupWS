@@ -351,6 +351,70 @@ L2TP is only for routing specific apps in VNC sessions.
 
 ---
 
+### 3.4 Client Setup for Iran Filtering (Linux)
+
+If you're in Iran or regions where Cloudflare IPs are filtered, configure WARP to use your VPS as a custom endpoint.
+
+**Prerequisites:**
+- Cloudflare One Agent installed and registered
+- VPS setup completed (Part 2)
+- WARP relay service running on VPS
+
+**Configure Custom Endpoint:**
+
+```bash
+# Set custom endpoint (requires sudo for Zero Trust)
+sudo warp-cli tunnel endpoint set YOUR_VPS_IP:443
+
+# Verify it's set
+warp-cli settings | grep endpoint
+# Should show: (user set) Override WARP endpoint: YOUR_VPS_IP:443
+
+# Connect
+warp-cli connect
+
+# Check status
+warp-cli status
+```
+
+**How It Works:**
+- Your device connects to VPS:443 (UDP) instead of Cloudflare's default IPs
+- VPS relay (socat) forwards traffic to Cloudflare's MASQUE endpoint (162.159.197.5:443)
+- Bypasses ISP blocking of Cloudflare IP ranges
+- All SSH/VNC access through Cloudflare tunnel works normally
+
+**Reset to Default (if needed):**
+```bash
+sudo warp-cli tunnel endpoint reset
+```
+
+**Troubleshooting:**
+
+If connection fails:
+1. Verify VPS relay is running:
+   ```bash
+   ssh root@YOUR_VPS_IP "systemctl status warp-relay"
+   ```
+
+2. Check WARP mode is correct:
+   ```bash
+   warp-cli settings | grep Mode
+   # Should show: Mode: WarpWithDnsOverHttps or Gateway with WARP
+   ```
+
+3. Verify you're using MASQUE protocol:
+   ```bash
+   warp-cli settings | grep protocol
+   # Should show: WARP tunnel protocol: MASQUE
+   ```
+
+4. Monitor VPS relay logs:
+   ```bash
+   ssh root@YOUR_VPS_IP "sudo journalctl -u warp-relay -f"
+   ```
+
+---
+
 ## License
 
 See [LICENSE](LICENSE) file.

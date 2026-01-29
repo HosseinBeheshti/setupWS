@@ -30,9 +30,9 @@ echo -e "${GREEN}Installing socat for UDP relay...${NC}"
 apt-get update
 apt-get install -y socat
 
-# Cloudflare WireGuard endpoint
-CLOUDFLARE_WARP_IP="162.159.193.5"
-CLOUDFLARE_WARP_PORT="2408"
+# Cloudflare MASQUE endpoint (for Iran filtering bypass)
+CLOUDFLARE_WARP_IP="162.159.197.5"
+CLOUDFLARE_WARP_PORT="443"
 
 # Local relay port (using standard HTTPS port for better firewall traversal)
 RELAY_PORT="${WARP_ROUTING_PORT:-443}"
@@ -41,7 +41,7 @@ echo -e "${GREEN}Creating systemd service for WARP relay...${NC}"
 
 cat > /etc/systemd/system/warp-relay.service <<EOF
 [Unit]
-Description=WARP UDP Relay to Cloudflare WireGuard
+Description=WARP UDP Relay to Cloudflare MASQUE
 Documentation=https://github.com/yourusername/setupWS
 After=network.target
 Wants=network-online.target
