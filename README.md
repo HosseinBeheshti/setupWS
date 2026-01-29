@@ -353,64 +353,65 @@ L2TP is only for routing specific apps in VNC sessions.
 
 ### 3.4 Client Setup for Iran Filtering (Linux)
 
-**Good News:** Cloudflare's MASQUE protocol (162.159.197.5:443) is NOT filtered in Iran! No VPS relay needed.
+If you're in Iran or regions where Cloudflare IPs are filtered by ISP, configure WARP to use your VPS as a custom endpoint.
 
 **Prerequisites:**
-- Cloudflare One Agent installed (see section 1.7)
+- Cloudflare One Agent installed and registered
+- VPS setup completed (Part 2)
+- WARP relay service running on VPS
 
-**Configure WARP:**
+**Configure Custom Endpoint:**
 
 ```bash
-# Register device (if new installation)
-sudo warp-cli registration new
+# Set custom endpoint (requires sudo for Zero Trust)
+sudo warp-cli tunnel endpoint set YOUR_VPS_IP:443
+
+# Verify it's set
+warp-cli settings | grep endpoint
+# Should show: (user set) Override WARP endpoint: YOUR_VPS_IP:443
 
 # Connect
 sudo warp-cli connect
 
 # Check status
 warp-cli status
-# Should show: Status update: Connected, Network: healthy
-```
-
-**Verify MASQUE Protocol:**
-```bash
-warp-cli settings | grep protocol
-# Should show: (network policy) WARP tunnel protocol: MASQUE
 ```
 
 **How It Works:**
-- WARP uses MASQUE protocol (HTTP/3 over UDP) which is NOT blocked in Iran
-- Default Cloudflare endpoint (162.159.197.5:443) works directly
+- Your device connects to VPS:443 (UDP) instead of Cloudflare's blocked IPs
+- VPS relay (socat) forwards traffic to Cloudflare's MASQUE endpoint (162.159.197.5:443)
+- Bypasses ISP blocking of Cloudflare IP ranges
 - All SSH/VNC access through Cloudflare tunnel works normally
-- No custom endpoint or VPS relay required!
+
+**Reset to Default (if needed):**
+```bash
+sudo warp-cli tunnel endpoint reset
+```
 
 **Troubleshooting:**
 
 If connection fails:
-1. Check WARP status:
+1. Verify VPS relay is running:
    ```bash
-   warp-cli status
-   # Should show: Connected, Network: healthy
+   ssh root@YOUR_VPS_IP "systemctl status warp-relay"
    ```
 
-2. Verify protocol is MASQUE:
+2. Check WARP mode is correct:
+   ```bash
+   warp-cli settings | grep Mode
+   # Should show: Mode: Warp
+   ```
+
+3. Verify you're using MASQUE protocol:
    ```bash
    warp-cli settings | grep protocol
-   # Must show: MASQUE (not WireGuard)
+   # Should show: WARP tunnel protocol: MASQUE
    ```
 
-3. If stuck on "Connecting", disconnect and reconnect:
+4. Monitor VPS relay logs:
    ```bash
-   sudo warp-cli disconnect
-   sudo warp-cli connect
+   ssh root@YOUR_VPS_IP "sudo journalctl -u warp-relay -f"
    ```
-
-4. Check systemd service:
-   ```bash
-   sudo systemctl status warp-svc
-   ```
-
-**Note:** The VPS relay (setup_warp_relay.sh) is included in this repository for regions where MASQUE might be blocked, but it's not needed in Iran as of January 2026.
 
 ---
 
