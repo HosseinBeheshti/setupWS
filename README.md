@@ -314,11 +314,11 @@ Since the dashboard UI is unreliable, use the CLI or deep links:
 Open terminal and run:
 
 ```bash
-# Set custom endpoint to your VPS
-warp-cli registration set-custom-endpoint YOUR_VPS_PUBLIC_IP:443
+# Set custom endpoint to your VPS (requires sudo for Zero Trust)
+sudo warp-cli tunnel endpoint set YOUR_VPS_PUBLIC_IP:443
 
 # Verify it's set
-warp-cli registration show
+warp-cli settings | grep endpoint
 
 # Connect
 warp-cli connect
@@ -468,8 +468,8 @@ On your device:
 # Check connection status
 warp-cli status
 
-# Should show "Connected" and using your custom endpoint
-warp-cli settings | grep endpoint
+# Check custom endpoint is set
+warp-cli settings
 ```
 
 On your VPS:
@@ -953,11 +953,11 @@ A: 22 (SSH), VNC ports (5910-591x), and optionally L2TP ports (500, 1701, 4500/u
 ### For Desktop (Linux/macOS/Windows)
 
 ```bash
-# Set custom endpoint
-warp-cli registration set-custom-endpoint YOUR_VPS_IP:443
+# Set custom endpoint (requires sudo/admin for Zero Trust)
+sudo warp-cli tunnel endpoint set YOUR_VPS_IP:443
 
 # Verify
-warp-cli registration show
+warp-cli settings | grep endpoint
 
 # Connect
 warp-cli connect
