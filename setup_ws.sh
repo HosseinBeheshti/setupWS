@@ -46,7 +46,7 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh")
+REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_fw.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
@@ -63,6 +63,13 @@ echo -e "  VPS IP: ${GREEN}${VPS_PUBLIC_IP:-auto-detect}${NC}"
 echo -e "  VNC Users: ${GREEN}$VNC_USER_COUNT${NC}"
 echo -e "  L2TP Apps: ${GREEN}${VPN_APPS:-none}${NC}"
 echo ""
+
+# Disable firewall during setup
+print_message "Disabling firewall during setup..."
+if command -v ufw &> /dev/null; then
+    ufw --force disable 2>/dev/null || true
+fi
+print_message "✓ Firewall disabled"
 
 # ============================================================
 # Step 1: Install All Required Packages
@@ -248,21 +255,13 @@ echo ""
 # ============================================================
 print_header "Step 6/6: Configuring Secure Firewall"
 
-print_message "Configuring firewall to block direct SSH/VNC access..."
-print_message "Access to SSH/VNC will ONLY be allowed through Cloudflare tunnel"
-
-# Reset UFW to defaults
-ufw --force reset
-
-# Deny all incoming by default
-ufw default deny incoming
-ufw default allow outgoing
-
-# Enable firewall
-ufw --force enable
-
-print_message "✓ Firewall configured - SSH/VNC only accessible via Cloudflare"
-print_warning "Direct SSH/VNC access is BLOCKED. Access only via Cloudflare tunnel."
+print_message "--- Running setup_fw.sh ---"
+./setup_fw.sh
+if [[ $? -ne 0 ]]; then
+    print_error "Firewall setup failed!"
+    exit 1
+fi
+print_message "✓ Firewall configured"
 echo ""
 
 # ============================================================

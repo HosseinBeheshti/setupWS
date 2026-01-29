@@ -197,17 +197,7 @@ else
     print_warning "Could not save iptables rules (netfilter-persistent not found)"
 fi
 
-# --- Configure Firewall ---
-print_message "Configuring firewall for L2TP..."
-if command -v ufw &> /dev/null; then
-    ufw allow 500/udp comment "IPsec"
-    ufw allow 1701/udp comment "L2TP"
-    ufw allow 4500/udp comment "IPsec NAT-T"
-    print_message "Firewall rules added for L2TP/IPsec"
-else
-    print_warning "ufw not available, skipping firewall rules. Please configure manually:"
-    print_warning "  Allow UDP ports: 500, 1701, 4500"
-fi
+# Note: Firewall rules are configured by setup_fw.sh
 
 # --- Load Kernel Modules ---
 print_message "Loading kernel modules..."

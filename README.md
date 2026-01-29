@@ -249,10 +249,20 @@ If you want to access VNC through Cloudflare (recommended):
    ```bash
    git clone https://github.com/HosseinBeheshti/setupWS.git
    cd setupWS
-    vim workstation.env
+   vim workstation.env
    ```
 
-3. **Save and exit** (`:wq` in vim)
+3. **Configure required settings** in `workstation.env`:
+   - `CLOUDFLARE_TUNNEL_TOKEN`: Your tunnel token from Part 1.3
+   - `VPS_PUBLIC_IP`: Your VPS public IP address
+   - `VNCUSER*_PASSWORD`: Set strong passwords for VNC users
+   - `L2TP_*`: L2TP VPN credentials if using VPN_APPS routing
+   - `FIREWALL_ALLOWED_PORTS`: Ports to allow through firewall (default: L2TP ports)
+     - Default: `500/udp,1701/udp,4500/udp` (L2TP/IPsec ports)
+     - Leave empty for Cloudflare tunnel-only access (most secure)
+     - Add custom ports if needed: `80/tcp,443/tcp,22/tcp`
+
+4. **Save and exit** (`:wq` in vim)
 
 ---
 
@@ -269,9 +279,8 @@ sudo ./setup_ws.sh
 2. Configures virtual router for VPN traffic
 3. Sets up L2TP/IPsec for VPN_APPS routing in VNC sessions
 4. Creates VNC servers for each user
-5. Installs cloudflared and configures Cloudflare Access with WARP routing
-6. Sets up WARP UDP relay (socat) to bypass ISP filtering (if WARP_ROUTING_ENABLED=true)
-7. Configures secure firewall (blocks direct SSH/VNC, forces Cloudflare tunnel)
+5. Installs cloudflared and configures Cloudflare tunnel for secure access
+6. Configures secure firewall with custom port rules from workstation.env
 
 **Duration**: 10-15 minutes depending on VPS speed.
 
@@ -348,6 +357,46 @@ This will:
 
 **Note:** is a separate independent VPN service for your client devices.
 L2TP is only for routing specific apps in VNC sessions.
+
+---
+
+## Firewall Configuration
+
+The setup includes a centralized firewall configuration via `setup_fw.sh`:
+
+### Default Configuration
+- **All incoming ports blocked** except those specified in `FIREWALL_ALLOWED_PORTS`
+- **L2TP/IPsec ports open by default**: UDP 500, 1701, 4500
+- **SSH/VNC access**: Only through Cloudflare tunnel (most secure)
+
+### Customizing Firewall Rules
+
+Edit `FIREWALL_ALLOWED_PORTS` in `workstation.env`:
+
+```bash
+# Examples:
+# Allow L2TP only (default):
+FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp"
+
+# Allow web ports:
+FIREWALL_ALLOWED_PORTS="80/tcp,443/tcp,500/udp,1701/udp,4500/udp"
+
+# Cloudflare tunnel-only (most secure, no direct access):
+FIREWALL_ALLOWED_PORTS=""
+```
+
+### Manual Firewall Changes
+
+To reconfigure firewall after initial setup:
+```bash
+sudo ./setup_fw.sh
+```
+
+### Security Notes
+- Direct SSH/VNC access is **always blocked** for security
+- All SSH/VNC access **must go through Cloudflare tunnel**
+- L2TP ports are opened for VPN connectivity from client devices
+- Modify `FIREWALL_ALLOWED_PORTS` only if you need additional services
 
 ---
 
