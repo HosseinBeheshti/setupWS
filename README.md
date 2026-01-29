@@ -1,15 +1,15 @@
 # Secure Remote Access Gateway with Cloudflare Zero Trust
 
-**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access with L2TP for app-specific routing in VNC sessions, and WARP custom endpoint to bypass ISP filtering.**
+**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access, OpenConnect VPN for secure internet access, and L2TP for app-specific routing in VNC sessions.**
 
 ---
 
 ## Architecture Overview
 
-This setup provides secure remote access with zero-trust control:
+This setup provides comprehensive secure remote access:
 
 - **Cloudflare Zero Trust**: Identity-aware SSH/VNC access management
-- **Cloudflare WARP**: Custom endpoint through VPS tunnel (bypasses ISP filtering)
+- **OpenConnect VPN (ocserv)**: AnyConnect-compatible VPN server for secure internet access
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
 ```
@@ -67,7 +67,7 @@ TRAFFIC FLOWS:
 ### What You Get
 
 - ✅ **Cloudflare Zero Trust** - Identity-aware SSH/VNC access (Gmail + OTP)
-- ✅ **Cloudflare WARP Custom Endpoint** - Bypass ISP filtering via VPS tunnel
+- ✅ **OpenConnect VPN Server** - AnyConnect-compatible VPN (port 443, looks like HTTPS)
 - ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions
 - ✅ **Multiple VNC Users** - Individual desktop sessions per user
 - ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
@@ -78,6 +78,7 @@ TRAFFIC FLOWS:
 
 - **VPS**: Ubuntu 24.04 with public IP
 - **Cloudflare Account**: Free tier (for Zero Trust Access)
+- **Domain**: A domain with DNS managed by Cloudflare (for OpenConnect VPN hostname)
 - **Email**: Gmail address for authentication
 - **Clients**: client apps for VPN, Cloudflare One Agent for SSH/VNC
 
@@ -254,13 +255,15 @@ If you want to access VNC through Cloudflare (recommended):
 
 3. **Configure required settings** in `workstation.env`:
    - `CLOUDFLARE_TUNNEL_TOKEN`: Your tunnel token from Part 1.3
+   - `OCSERV_HOSTNAME`: Your VPN domain (e.g., vpn.yourdomain.com)
+     - Create an A record in Cloudflare DNS pointing to your VPS IP
+     - **Important**: Set DNS to "DNS only" (disable proxy/orange cloud)
    - `VPS_PUBLIC_IP`: Your VPS public IP address
    - `VNCUSER*_PASSWORD`: Set strong passwords for VNC users
    - `L2TP_*`: L2TP VPN credentials if using VPN_APPS routing
-   - `FIREWALL_ALLOWED_PORTS`: Ports to allow through firewall (default: L2TP ports)
-     - Default: `500/udp,1701/udp,4500/udp` (L2TP/IPsec ports)
+   - `FIREWALL_ALLOWED_PORTS`: Ports to allow through firewall
+     - Default: `500/udp,1701/udp,4500/udp,443` (L2TP + OpenConnect)
      - Leave empty for Cloudflare tunnel-only access (most secure)
-     - Add custom ports if needed: `80/tcp,443/tcp,22/tcp`
 
 4. **Save and exit** (`:wq` in vim)
 
@@ -275,12 +278,13 @@ sudo ./setup_ws.sh
 ```
 
 **What this does:**
-1. Installs all required packages (VNC, L2TP, Docker, VS Code, Chrome, etc.)
+1. Installs all required packages (VNC, L2TP, Docker, VS Code, Chrome, ocserv, etc.)
 2. Configures virtual router for VPN traffic
 3. Sets up L2TP/IPsec for VPN_APPS routing in VNC sessions
 4. Creates VNC servers for each user
 5. Installs cloudflared and configures Cloudflare tunnel for secure access
-6. Configures secure firewall with custom port rules from workstation.env
+6. Installs and configures OpenConnect VPN server (ocserv)
+7. Configures secure firewall with custom port rules from workstation.env
 
 **Duration**: 10-15 minutes depending on VPS speed.
 
@@ -355,13 +359,81 @@ L2TP is only for routing specific apps in VNC sessions.
 
 ---
 
+### 3.4 Connect to OpenConnect VPN
+
+OpenConnect VPN provides secure internet access through your VPS. It uses the AnyConnect-compatible protocol on port 443, making it look like standard HTTPS traffic.
+
+#### Managing VPN Users
+
+**Add a new VPN user:**
+```bash
+sudo ./manage_ocserv.sh add username
+```
+You'll be prompted to enter a password for the user.
+
+**Remove a user:**
+```bash
+sudo ./manage_ocserv.sh remove username
+```
+
+**List all users:**
+```bash
+sudo ./manage_ocserv.sh list
+```
+
+**Disable/Enable a user:**
+```bash
+sudo ./manage_ocserv.sh disable username
+sudo ./manage_ocserv.sh enable username
+```
+
+**Change user password:**
+```bash
+sudo ./manage_ocserv.sh passwd username
+```
+
+#### Client Connection
+
+**On Windows/Mac:**
+- Download and install [Cisco AnyConnect Client](https://www.cisco.com/c/en/us/support/security/anyconnect-secure-mobility-client/tsd-products-support-series-home.html)
+- Or use [OpenConnect GUI](https://openconnect.github.io/openconnect-gui/)
+- Server: `vpn.yourdomain.com:443`
+- Username: Your VPN username
+- Password: Your VPN password
+
+**On Linux:**
+```bash
+# Install OpenConnect client
+sudo apt-get install openconnect
+
+# Connect to VPN
+sudo openconnect vpn.yourdomain.com:443
+```
+
+**On Android/iOS:**
+- Install Cisco AnyConnect from Play Store or App Store
+- Add new connection: `vpn.yourdomain.com:443`
+- Enter credentials when prompted
+
+#### VPN Features
+
+- ✅ **Port 443 (TCP & UDP)**: Looks like HTTPS, bypasses most firewalls
+- ✅ **One Connection Per User**: max-same-clients = 1
+- ✅ **Capacity Control**: Supports up to 16 concurrent users (configurable)
+- ✅ **Full Traffic Routing**: All client traffic routes through VPS
+- ✅ **DNS Privacy**: Uses Google DNS (8.8.8.8) or Cloudflare DNS (1.1.1.1)
+- ✅ **Auto-start**: Service starts automatically on boot
+
+---
+
 ## Firewall Configuration
 
 The setup includes a centralized firewall configuration via `setup_fw.sh`:
 
 ### Default Configuration
 - **All incoming ports blocked** except those specified in `FIREWALL_ALLOWED_PORTS`
-- **L2TP/IPsec ports open by default**: UDP 500, 1701, 4500
+- **L2TP/IPsec ports**: UDP 500, 1701, 4500 (for L2TP VPN)
+- **OpenConnect VPN**: Port 443 TCP/UDP (for ocserv)
 - **SSH/VNC access**: Only through Cloudflare tunnel (most secure)
 
 ### Customizing Firewall Rules
@@ -370,11 +442,14 @@ Edit `FIREWALL_ALLOWED_PORTS` in `workstation.env`:
 
 ```bash
 # Examples:
-# Allow L2TP only (default):
-FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp"
+# Default (L2TP + OpenConnect):
+FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp,443"
 
-# Allow web ports:
-FIREWALL_ALLOWED_PORTS="80/tcp,443/tcp,500/udp,1701/udp,4500/udp"
+# OpenConnect only:
+FIREWALL_ALLOWED_PORTS="443"
+
+# Add custom web ports:
+FIREWALL_ALLOWED_PORTS="80/tcp,443,500/udp,1701/udp,4500/udp"
 
 # Cloudflare tunnel-only (most secure, no direct access):
 FIREWALL_ALLOWED_PORTS=""
@@ -390,7 +465,8 @@ sudo ./setup_fw.sh
 ### Security Notes
 - Direct SSH/VNC access is **always blocked** for security
 - All SSH/VNC access **must go through Cloudflare tunnel**
-- L2TP ports are opened for VPN connectivity from client devices
+- L2TP ports (500, 1701, 4500) are opened for L2TP VPN connectivity
+- OpenConnect port (443) is opened for VPN access
 - Modify `FIREWALL_ALLOWED_PORTS` only if you need additional services
 
 ---

@@ -46,7 +46,7 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_fw.sh")
+REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_ocserv.sh" "setup_fw.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
@@ -250,10 +250,20 @@ fi
 print_message "✓ Cloudflare Zero Trust Access configured"
 echo ""
 
+# 5.5: Setup OpenConnect VPN Server
+print_message "--- Running setup_ocserv.sh ---"
+./setup_ocserv.sh
+if [[ $? -ne 0 ]]; then
+    print_error "OpenConnect VPN setup failed!"
+    exit 1
+fi
+print_message "✓ OpenConnect VPN Server configured"
+echo ""
+
 # ============================================================
 # Step 6: Configure Final Firewall Rules
 # ============================================================
-print_header "Step 6/6: Configuring Secure Firewall"
+print_header "Step 6/7: Configuring Secure Firewall"
 
 print_message "--- Running setup_fw.sh ---"
 ./setup_fw.sh
@@ -278,6 +288,7 @@ echo -e "  ✓ VS Code and Google Chrome"
 echo -e "  ✓ VNC Server with $VNC_USER_COUNT user(s)"
 echo -e "  ✓ L2TP/IPsec VPN (for VPN_APPS in VNC sessions)"
 echo -e "  ✓ Cloudflare Zero Trust Access (SSH/VNC)"
+echo -e "  ✓ OpenConnect VPN Server (ocserv)"
 echo -e "  ✓ Virtual Router for VPN traffic"
 echo ""
 
