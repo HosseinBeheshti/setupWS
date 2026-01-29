@@ -115,15 +115,15 @@ fi
 
 print_message "Tunnel ID: $TUNNEL_ID"
 
-# 5. Create cloudflared config file with WARP routing
-print_message "Creating cloudflared configuration with WARP routing..."
+# 5. Create cloudflared config file (WITHOUT warp-routing - must be set in dashboard)
+print_message "Creating cloudflared configuration..."
 cat > /etc/cloudflared/config.yml <<EOF
 tunnel: $TUNNEL_ID
 credentials-file: /root/.cloudflared/$TUNNEL_ID.json
 
-# Enable WARP routing for custom endpoint (bypass Iran filtering)
-warp-routing:
-  enabled: ${WARP_ROUTING_ENABLED:-true}
+# Note: WARP routing must be enabled in Cloudflare dashboard
+# Settings → WARP Client → Device settings → Network routes
+# This config file cannot enable it for token-based tunnels
 
 # Ingress rules are managed via Cloudflare dashboard
 ingress:
@@ -230,15 +230,19 @@ echo -e "   ${YELLOW}Note:${NC} Config-based tunnels with WARP routing enabled"
 echo -e "   Check the Cloudflare dashboard (Networks → Tunnels) to verify connection"
 echo ""
 if [[ "${WARP_ROUTING_ENABLED}" == "true" ]]; then
-echo -e "4. ${BLUE}Configure Custom WARP Endpoint (For Iran/Filtered Regions):${NC}"
-echo -e "   - Go to: Settings → WARP Client → Device settings"
-echo -e "   - Add custom endpoint: ${GREEN}$VPS_PUBLIC_IP:${WARP_ROUTING_PORT}${NC}"
-echo -e "   - This allows Cloudflare One Agent to connect via your VPS"
-echo -e "   - See README.md section 1.8 for detailed instructions"
+echo -e "4. ${BLUE}WARP Custom Endpoint is handled by setup_warp_relay.sh (socat relay)${NC}"
+echo -e "   - VPS relay: ${GREEN}$VPS_PUBLIC_IP:${WARP_ROUTING_PORT}${NC} → Cloudflare WireGuard"
+echo -e "   - Client setup: ${CYAN}warp-cli registration set-custom-endpoint $VPS_PUBLIC_IP:${WARP_ROUTING_PORT}${NC}"
+echo -e "   - Dashboard MTU: Set to 1280 (Settings → WARP Client → Device settings)"
+echo -e "   - See README.md section 1.8 for complete guide"
+echo ""
+echo -e "   ${YELLOW}Note: Token-based tunnels don't support warp-routing in config file${NC}"
+echo -e "   ${YELLOW}      WARP relay uses socat instead (already configured)${NC}"
 echo ""
 fi
-echo -e "5. ${BLUE}VPN Access (Direct, bypass Cloudflare):${NC}"
-echo -e "   - L2TP: Run ${CYAN}sudo ./run_vpn.sh${NC} in VNC sessions"
+echo -e "5. ${BLUE}L2TP VPN (For VPN_APPS in VNC sessions):${NC}"
+echo -e "   - Run ${CYAN}sudo ./run_vpn.sh${NC} inside VNC sessions"
+echo -e "   - Routes specific apps through L2TP: ${GREEN}${VPN_APPS}${NC}"
 echo ""
 
 echo -e "${CYAN}Important:${NC} Firewall will be configured by setup_ws.sh to block direct SSH/VNC"
