@@ -132,7 +132,7 @@ if [[ -n "$VPN_APPS" ]]; then
                 ;;
         esac
     done
-fi  qrencode
+fi
 
 # UFW firewall
 print_message "Installing UFW firewall..."
