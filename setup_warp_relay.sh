@@ -44,11 +44,11 @@ sysctl -w net.ipv4.ip_forward=1
 
 # Remove any existing rules for this port
 iptables -t nat -D PREROUTING -p udp --dport ${RELAY_PORT} -j DNAT --to-destination ${CLOUDFLARE_WARP_IP}:${CLOUDFLARE_WARP_PORT} 2>/dev/null || true
-iptables -t nat -D POSTROUTING -p udp -d ${CLOUDFLARE_WARP_IP} --dport ${CLOUDFLARE_WARP_PORT} -j MASQUERADE 2>/dev/null || true
+iptables -t nat -D POSTROUTING -d ${CLOUDFLARE_WARP_IP} -p udp -j MASQUERADE 2>/dev/null || true
 
 # Add NAT rules for WARP relay
 iptables -t nat -A PREROUTING -p udp --dport ${RELAY_PORT} -j DNAT --to-destination ${CLOUDFLARE_WARP_IP}:${CLOUDFLARE_WARP_PORT}
-iptables -t nat -A POSTROUTING -p udp -d ${CLOUDFLARE_WARP_IP} --dport ${CLOUDFLARE_WARP_PORT} -j MASQUERADE
+iptables -t nat -A POSTROUTING -d ${CLOUDFLARE_WARP_IP} -p udp -j MASQUERADE
 
 # Save iptables rules
 netfilter-persistent save
