@@ -290,17 +290,21 @@ sudo ./setup_ws.sh
 
 ## Part 3: Client Setup
 
+```bash
+# Add cloudflare gpg key
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
+
+# Add this repo to your apt repositories
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+
+# install cloudflared
+sudo apt-get update && sudo apt-get install cloudflared
+```
+
 ### 3.1 Connect to VNC Desktop
 
-**Via Cloudflare Access (Required):**
-
-1. **Install and connect Cloudflare One Agent** (from Part 1.7)
-2. **Access via browser**:
-   - Open browser: `https://vnc1-vps.yourteam.cloudflareaccess.com`
-   - Authenticate with your email (one-time PIN)
-   - Access VNC session through Cloudflare's secure tunnel
-
-**Or use VNC client with cloudflared:**
+**use VNC client with cloudflared:**
 ```bash
 # Install cloudflared on client machine
 # Create local tunnel to VNC
@@ -317,23 +321,14 @@ cloudflared access tcp --hostname vnc1-vps.yourteam.cloudflareaccess.com --url l
 
 ### 3.2 Access via SSH
 
-**Via Cloudflare Access (Required):**
+1. **SSH via cloudflared**:
+    ```bash
+    cloudflared access ssh --hostname ssh.yourdomain.org --url localhost:2222
+    ```
 
-1. **Connect Cloudflare One Agent** on your device
-2. **SSH via cloudflared**:
-   ```bash
-   cloudflared access ssh --hostname ssh-vps.yourteam.cloudflareaccess.com
-   ```
-
-**Or configure SSH client** (add to `~/.ssh/config`):
-```
-Host vps-ssh
-  ProxyCommand cloudflared access ssh --hostname ssh-vps.yourteam.cloudflareaccess.com
-  User root
-```
-
-Then connect with: `ssh vps-ssh`
-
+    ```bash
+    ssh -p 2222 username@localhost
+    ```
 **Direct SSH:**
 
 **Not Available** - Direct SSH access is blocked by firewall for security. You must use Cloudflare Access.
