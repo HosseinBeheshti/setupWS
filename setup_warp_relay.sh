@@ -55,9 +55,17 @@ netfilter-persistent save
 
 echo -e "${GREEN}✓ iptables NAT rules configured${NC}"
 
-# Configure firewall
-echo -e "${GREEN}Configuring firewall for WARP relay...${NC}"
-ufw allow ${RELAY_PORT}/udp comment "WARP UDP Relay"
+# Configure firewall with iptables
+echo -e "${GREEN}Configuring iptables firewall for WARP relay...${NC}"
+
+# Allow incoming UDP on relay port
+iptables -C INPUT -p udp --dport ${RELAY_PORT} -j ACCEPT 2>/dev/null || \
+    iptables -A INPUT -p udp --dport ${RELAY_PORT} -j ACCEPT
+
+# Save iptables rules
+netfilter-persistent save
+
+echo -e "${GREEN}✓ Firewall configured to allow port ${RELAY_PORT}/udp${NC}"
 
 echo ""
 echo -e "${GREEN}================================${NC}"
