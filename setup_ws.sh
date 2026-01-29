@@ -250,16 +250,6 @@ fi
 print_message "✓ Cloudflare Zero Trust Access configured"
 echo ""
 
-# 5.5: Setup OpenConnect VPN Server
-print_message "--- Running setup_ocserv.sh ---"
-./setup_ocserv.sh
-if [[ $? -ne 0 ]]; then
-    print_error "OpenConnect VPN setup failed!"
-    exit 1
-fi
-print_message "✓ OpenConnect VPN Server configured"
-echo ""
-
 # ============================================================
 # Step 6: Configure Final Firewall Rules
 # ============================================================
