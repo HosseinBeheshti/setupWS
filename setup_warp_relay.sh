@@ -42,7 +42,7 @@ echo -e "${GREEN}Creating systemd service for WARP relay...${NC}"
 cat > /etc/systemd/system/warp-relay.service <<EOF
 [Unit]
 Description=WARP UDP Relay to Cloudflare MASQUE
-Documentation=https://github.com/yourusername/setupWS
+Documentation=https://github.com/HosseinBeheshti/setupWS
 After=network.target
 Wants=network-online.target
 

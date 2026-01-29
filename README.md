@@ -364,7 +364,7 @@ If you're in Iran or regions where Cloudflare IPs are filtered, configure WARP t
 
 ```bash
 # Set custom endpoint (requires sudo for Zero Trust)
-sudo warp-cli tunnel endpoint set YOUR_VPS_IP:443
+
 
 # Verify it's set
 warp-cli settings | grep endpoint
