@@ -69,7 +69,7 @@ fi
 
 # Generate public key from private key
 if [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
-    XRAY_REALITY_PUBLIC_KEY=$(echo "$XRAY_REALITY_PRIVATE_KEY" | xray x25519 -i stdin | grep "Public key:" | awk '{print $3}')
+    XRAY_REALITY_PUBLIC_KEY=$(echo "$XRAY_REALITY_PRIVATE_KEY" | xray x25519 -i | grep "Public key:" | awk '{print $3}')
     print_warning "Generated new public key: $XRAY_REALITY_PUBLIC_KEY"
     print_warning "Please update XRAY_REALITY_PUBLIC_KEY in workstation.env with this value"
 fi
@@ -275,9 +275,8 @@ echo -e "   ${BLUE}→${NC} Fingerprint: chrome"
 echo -e "   ${BLUE}→${NC} Public Key: $XRAY_REALITY_PUBLIC_KEY"
 echo -e "   ${BLUE}→${NC} Short ID: $XRAY_REALITY_SHORT_IDS"
 echo ""
-print_warning "6. Manage users with: sudo ./manage_xray.sh"
-print_warning "7. Check service logs: journalctl -u xray -f"
-print_warning "8. Service commands:"
+print_warning "6. Check service logs: journalctl -u xray -f"
+print_warning "7. Service commands:"
 echo -e "   ${BLUE}→${NC} Start: systemctl start xray"
 echo -e "   ${BLUE}→${NC} Stop: systemctl stop xray"
 echo -e "   ${BLUE}→${NC} Restart: systemctl restart xray"
