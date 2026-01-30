@@ -109,10 +109,10 @@ get_vless_url() {
 }
 
 restart_xray() {
-    print_info "Restarting Xray container..."
-    docker restart xray-server
+    print_info "Restarting Xray service..."
+    systemctl restart xray
     sleep 2
-    print_success "Xray container restarted"
+    print_success "Xray service restarted"
 }
 
 # ============================================================
@@ -323,19 +323,21 @@ show_status() {
     print_info "Xray Server Status:"
     echo ""
     
-    # Check if container is running
-    if docker ps | grep -q xray-server; then
-        print_success "Xray container is running"
+    # Check if service is running
+    if systemctl is-active --quiet xray; then
+        print_success "Xray service is running"
         echo ""
-        docker ps --filter name=xray-server --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+        systemctl status xray --no-pager -l
         echo ""
         
         # Show recent logs
-        print_info "Recent logs (last 10 lines):"
-        docker logs --tail 10 xray-server
+        print_info "Recent logs (last 20 lines):"
+        journalctl -u xray -n 20 --no-pager
     else
-        print_error "Xray container is not running"
-        print_info "Start it with: docker start xray-server"
+        print_error "Xray service is not running"
+        print_info "Start it with: systemctl start xray"
+        echo ""
+        systemctl status xray --no-pager -l
     fi
 }
 

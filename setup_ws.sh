@@ -335,7 +335,7 @@ echo -e ""
 echo -e "4. ${BLUE}Monitor services:${NC}"
 echo -e "   - VNC: ${CYAN}systemctl status vncserver-<username>@<display>${NC}"
 echo -e "   - Cloudflare: ${CYAN}systemctl status cloudflared${NC}"
-echo -e "   - Xray: ${CYAN}docker ps | grep xray-server${NC}"
+echo -e "   - Xray: ${CYAN}systemctl status xray${NC}"
 echo -e ""
 
 echo -e "${GREEN}Setup completed at $(date)${NC}"

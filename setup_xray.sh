@@ -2,7 +2,7 @@
 # ============================================================
 # Xray VPN Server Setup Script (VLESS + Reality)
 # ============================================================
-# This script sets up Xray-core in Docker mode with VLESS + Reality protocol
+# This script sets up Xray-core with direct installation (not Docker)
 # Reality protocol mimics legitimate HTTPS traffic to bypass DPI filtering
 # ============================================================
 
@@ -36,18 +36,14 @@ print_info "Starting Xray-core Setup with VLESS + Reality Protocol"
 print_info "============================================================"
 
 # ============================================================
-# Install Docker if not present
+# Install Xray-core using official script
 # ============================================================
-if ! command -v docker &> /dev/null; then
-    print_info "Docker not found. Installing Docker..."
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
-    rm get-docker.sh
-    systemctl enable docker
-    systemctl start docker
-    print_success "Docker installed successfully"
+if ! command -v xray &> /dev/null; then
+    print_info "Installing Xray-core..."
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+    print_success "Xray-core installed successfully"
 else
-    print_success "Docker is already installed"
+    print_success "Xray-core is already installed"
 fi
 
 # ============================================================
@@ -64,19 +60,16 @@ fi
 # ============================================================
 print_info "Generating Reality protocol keys..."
 
-# Pull Xray image first to use for key generation
-docker pull ghcr.io/xtls/xray-core:latest
-
 # Generate private key
 if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ "$XRAY_REALITY_PRIVATE_KEY" = "<auto_generated_private_key>" ]; then
-    XRAY_REALITY_PRIVATE_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest x25519)
+    XRAY_REALITY_PRIVATE_KEY=$(xray x25519)
     print_warning "Generated new private key: $XRAY_REALITY_PRIVATE_KEY"
     print_warning "Please update XRAY_REALITY_PRIVATE_KEY in workstation.env with this value"
 fi
 
 # Generate public key from private key
 if [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
-    XRAY_REALITY_PUBLIC_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest x25519 -i "$XRAY_REALITY_PRIVATE_KEY" | grep "Public key:" | awk '{print $3}')
+    XRAY_REALITY_PUBLIC_KEY=$(echo "$XRAY_REALITY_PRIVATE_KEY" | xray x25519 -i stdin | grep "Public key:" | awk '{print $3}')
     print_warning "Generated new public key: $XRAY_REALITY_PUBLIC_KEY"
     print_warning "Please update XRAY_REALITY_PUBLIC_KEY in workstation.env with this value"
 fi
@@ -201,36 +194,21 @@ EOF
 print_success "Xray configuration file created with Reality protocol"
 
 # ============================================================
-# Stop and Remove Existing Container if Exists
+# Enable and Start Xray Service
 # ============================================================
-if docker ps -a | grep -q xray-server; then
-    print_info "Stopping existing Xray container..."
-    docker stop xray-server 2>/dev/null || true
-    docker rm xray-server 2>/dev/null || true
-fi
+print_info "Enabling and starting Xray service..."
+systemctl enable xray
+systemctl restart xray
 
-# ============================================================
-# Run Xray Docker Container
-# ============================================================
-print_info "Starting Xray-core container with Reality protocol..."
-docker run -d \
-    --name xray-server \
-    --restart unless-stopped \
-    -v "$XRAY_CONFIG_DIR":/etc/xray \
-    -p "$XRAY_PORT:$XRAY_PORT" \
-    --network host \
-    ghcr.io/xtls/xray-core:latest \
-    run -c /etc/xray/config.json
-
-# Wait for container to start
+# Wait for service to start
 sleep 3
 
-# Check if container is running
-if docker ps | grep -q xray-server; then
-    print_success "Xray-core container started successfully"
+# Check if service is running
+if systemctl is-active --quiet xray; then
+    print_success "Xray service started successfully"
 else
-    print_error "Failed to start Xray-core container"
-    docker logs xray-server
+    print_error "Failed to start Xray service"
+    systemctl status xray
     exit 1
 fi
 
@@ -278,13 +256,13 @@ echo ""
 print_info "VLESS Connection String:"
 echo -e "${GREEN}vless://$XRAY_UUID@$SERVER_IP:$XRAY_PORT?security=reality&sni=${XRAY_REALITY_SERVER_NAMES%%,*}&fp=chrome&pbk=$XRAY_REALITY_PUBLIC_KEY&sid=$XRAY_REALITY_SHORT_IDS&type=tcp&flow=$XRAY_FLOW#Xray-Reality${NC}"
 echo ""
-print_info "Container Status:"
-docker ps --filter name=xray-server --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+print_info "Service Status:"
+systemctl status xray --no-pager -l
 echo ""
 print_warning "Important Notes:"
 print_warning "1. Reality protocol mimics connection to $XRAY_REALITY_DEST"
 print_warning "2. No SSL certificates needed - Reality handles encryption"
-print_warning "3. Save your UUID and keys securely (they're in workstation.env)"
+print_warning "3. Save your UUID and keys securely (stored in workstation.env)"
 print_warning "4. Use v2rayN, v2rayNG, or compatible clients to connect"
 print_warning "5. Client Configuration:"
 echo -e "   ${BLUE}→${NC} Address: $SERVER_IP"
@@ -298,6 +276,11 @@ echo -e "   ${BLUE}→${NC} Public Key: $XRAY_REALITY_PUBLIC_KEY"
 echo -e "   ${BLUE}→${NC} Short ID: $XRAY_REALITY_SHORT_IDS"
 echo ""
 print_warning "6. Manage users with: sudo ./manage_xray.sh"
-print_warning "7. Check container logs: docker logs xray-server"
+print_warning "7. Check service logs: journalctl -u xray -f"
+print_warning "8. Service commands:"
+echo -e "   ${BLUE}→${NC} Start: systemctl start xray"
+echo -e "   ${BLUE}→${NC} Stop: systemctl stop xray"
+echo -e "   ${BLUE}→${NC} Restart: systemctl restart xray"
+echo -e "   ${BLUE}→${NC} Status: systemctl status xray"
 echo ""
 print_success "Setup completed successfully!"
