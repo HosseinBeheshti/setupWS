@@ -69,14 +69,14 @@ docker pull ghcr.io/xtls/xray-core:latest
 
 # Generate private key
 if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ "$XRAY_REALITY_PRIVATE_KEY" = "<auto_generated_private_key>" ]; then
-    XRAY_REALITY_PRIVATE_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest xray x25519)
+    XRAY_REALITY_PRIVATE_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest x25519)
     print_warning "Generated new private key: $XRAY_REALITY_PRIVATE_KEY"
     print_warning "Please update XRAY_REALITY_PRIVATE_KEY in workstation.env with this value"
 fi
 
 # Generate public key from private key
 if [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
-    XRAY_REALITY_PUBLIC_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest xray x25519 -i "$XRAY_REALITY_PRIVATE_KEY" | grep "Public key:" | awk '{print $3}')
+    XRAY_REALITY_PUBLIC_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest x25519 -i "$XRAY_REALITY_PRIVATE_KEY" | grep "Public key:" | awk '{print $3}')
     print_warning "Generated new public key: $XRAY_REALITY_PUBLIC_KEY"
     print_warning "Please update XRAY_REALITY_PUBLIC_KEY in workstation.env with this value"
 fi
