@@ -144,6 +144,9 @@ print_info "Created Xray configuration directory: $XRAY_CONFIG_DIR"
 # ============================================================
 print_info "Generating Xray configuration with Reality protocol..."
 
+# Use XRAY_LISTENING_PORT if defined, otherwise fall back to XRAY_PORT
+LISTEN_PORT="${XRAY_LISTENING_PORT:-$XRAY_PORT}"
+
 cat > "$XRAY_CONFIG_DIR/config.json" <<EOF
 {
   "log": {
@@ -151,7 +154,7 @@ cat > "$XRAY_CONFIG_DIR/config.json" <<EOF
   },
   "inbounds": [
     {
-      "port": $XRAY_PORT,
+      "port": $LISTEN_PORT,
       "protocol": "vless",
       "settings": {
         "clients": [
@@ -233,12 +236,12 @@ fi
 # ============================================================
 print_info "Configuring firewall for Xray..."
 if command -v ufw &> /dev/null; then
-    ufw allow "$XRAY_PORT/tcp" comment "Xray VLESS Reality"
-    print_success "UFW firewall rule added for port $XRAY_PORT"
+    ufw allow "$LISTEN_PORT/tcp" comment "Xray VLESS Reality"
+    print_success "UFW firewall rule added for port $LISTEN_PORT"
 elif command -v firewall-cmd &> /dev/null; then
-    firewall-cmd --permanent --add-port="$XRAY_PORT/tcp"
+    firewall-cmd --permanent --add-port="$LISTEN_PORT/tcp"
     firewall-cmd --reload
-    print_success "firewalld rule added for port $XRAY_PORT"
+    print_success "firewalld rule added for port $LISTEN_PORT"
 fi
 
 # ============================================================
@@ -258,7 +261,8 @@ print_success "============================================================"
 echo ""
 print_info "Connection Details:"
 echo -e "${BLUE}Server IP:${NC} $SERVER_IP"
-echo -e "${BLUE}Port:${NC} $XRAY_PORT"
+echo -e "${BLUE}Port:${NC} $LISTEN_PORT (Users connect here)"
+echo -e "${BLUE}Destination:${NC} $XRAY_REALITY_DEST (Reality mimics HTTPS to this site)"
 echo -e "${BLUE}Protocol:${NC} VLESS"
 echo -e "${BLUE}Security:${NC} Reality"
 echo -e "${BLUE}Flow:${NC} $XRAY_FLOW"
@@ -270,7 +274,7 @@ echo -e "${BLUE}SNI:${NC} ${XRAY_REALITY_SERVER_NAMES%%,*}"
 echo -e "${BLUE}Fingerprint:${NC} chrome"
 echo ""
 print_info "VLESS Connection String:"
-echo -e "${GREEN}vless://$XRAY_UUID@$SERVER_IP:$XRAY_PORT?security=reality&sni=${XRAY_REALITY_SERVER_NAMES%%,*}&fp=chrome&pbk=$XRAY_REALITY_PUBLIC_KEY&sid=$XRAY_REALITY_SHORT_IDS&type=tcp&flow=$XRAY_FLOW#Xray-Reality${NC}"
+echo -e "${GREEN}vless://$XRAY_UUID@$SERVER_IP:$LISTEN_PORT?security=reality&sni=${XRAY_REALITY_SERVER_NAMES%%,*}&fp=chrome&pbk=$XRAY_REALITY_PUBLIC_KEY&sid=$XRAY_REALITY_SHORT_IDS&type=tcp&flow=$XRAY_FLOW#Xray-Reality${NC}"
 echo ""
 print_info "Service Status:"
 systemctl status xray --no-pager -l
@@ -282,7 +286,7 @@ print_warning "3. Save your UUID and keys securely - stored in workstation.env"
 print_warning "4. Use v2rayN, v2rayNG, or compatible clients to connect"
 print_warning "5. Client Configuration:"
 echo -e "   ${BLUE}→${NC} Address: $SERVER_IP"
-echo -e "   ${BLUE}→${NC} Port: $XRAY_PORT"
+echo -e "   ${BLUE}→${NC} Port: $LISTEN_PORT (Users connect to this port)"
 echo -e "   ${BLUE}→${NC} UUID: $XRAY_UUID"
 echo -e "   ${BLUE}→${NC} Flow: $XRAY_FLOW"
 echo -e "   ${BLUE}→${NC} Security: reality"
