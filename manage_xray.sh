@@ -70,17 +70,38 @@ get_vless_url() {
     local flow=$XRAY_FLOW
     local security=$XRAY_SECURITY
     local network=$XRAY_NETWORK
-    local domain=$XRAY_PANEL_DOMAIN
     local port=$XRAY_PORT
     
-    # Build VLESS URL
-    local url="vless://${uuid}@${domain}:${port}?"
-    url="${url}security=${security}"
-    url="${url}&sni=${domain}"
-    url="${url}&type=${network}"
+    # Get server IP
+    local server_ip=$(hostname -I | awk '{print $1}')
+    if [ -z "$server_ip" ]; then
+        server_ip="YOUR_SERVER_IP"
+    fi
     
-    if [ -n "$flow" ]; then
+    # Build VLESS URL based on security type
+    local url="vless://${uuid}@${server_ip}:${port}?"
+    
+    if [ "$security" = "reality" ]; then
+        # Reality protocol parameters
+        local sni="${XRAY_REALITY_SERVER_NAMES%%,*}"  # Get first server name
+        local public_key="$XRAY_REALITY_PUBLIC_KEY"
+        local short_id="$XRAY_REALITY_SHORT_IDS"
+        
+        url="${url}security=reality"
+        url="${url}&sni=${sni}"
+        url="${url}&fp=chrome"
+        url="${url}&pbk=${public_key}"
+        url="${url}&sid=${short_id}"
+        url="${url}&type=${network}"
         url="${url}&flow=${flow}"
+    else
+        # TLS protocol parameters
+        url="${url}security=${security}"
+        url="${url}&sni=${XRAY_PANEL_DOMAIN}"
+        url="${url}&type=${network}"
+        if [ -n "$flow" ]; then
+            url="${url}&flow=${flow}"
+        fi
     fi
     
     url="${url}#${email}"
@@ -139,17 +160,25 @@ add_user() {
     restart_xray
     
     # Display connection info
+    local server_ip=$(hostname -I | awk '{print $1}')
     echo ""
     echo -e "${CYAN}============================================================${NC}"
     echo -e "${CYAN}User Connection Information${NC}"
     echo -e "${CYAN}============================================================${NC}"
     echo -e "${BLUE}Email:${NC} $email"
     echo -e "${BLUE}UUID:${NC} $new_uuid"
-    echo -e "${BLUE}Domain:${NC} $XRAY_PANEL_DOMAIN"
+    echo -e "${BLUE}Server IP:${NC} $server_ip"
     echo -e "${BLUE}Port:${NC} $XRAY_PORT"
     echo -e "${BLUE}Network:${NC} $XRAY_NETWORK"
     echo -e "${BLUE}Security:${NC} $XRAY_SECURITY"
     echo -e "${BLUE}Flow:${NC} $XRAY_FLOW"
+    
+    if [ "$XRAY_SECURITY" = "reality" ]; then
+        echo -e "${BLUE}SNI:${NC} ${XRAY_REALITY_SERVER_NAMES%%,*}"
+        echo -e "${BLUE}Fingerprint:${NC} chrome"
+        echo -e "${BLUE}Public Key:${NC} $XRAY_REALITY_PUBLIC_KEY"
+        echo -e "${BLUE}Short ID:${NC} $XRAY_REALITY_SHORT_IDS"
+    fi
     echo ""
     
     # Generate and display VLESS URL
@@ -247,18 +276,26 @@ show_qr() {
     
     if [ -z "$user_data" ]; then
         print_error "User '$email' not found"
-        exit 1
-    fi
-    
-    local uuid=$(echo "$user_data" | jq -r '.id')
-    local flow=$(echo "$user_data" | jq -r '.flow')
-    
-    # Generate VLESS URL
-    local vless_url=$(get_vless_url "$uuid" "$email")
+    local server_ip=$(hostname -I | awk '{print $1}')
     
     echo ""
     echo -e "${CYAN}============================================================${NC}"
     echo -e "${CYAN}User Connection Information${NC}"
+    echo -e "${CYAN}============================================================${NC}"
+    echo -e "${BLUE}Email:${NC} $email"
+    echo -e "${BLUE}UUID:${NC} $uuid"
+    echo -e "${BLUE}Server IP:${NC} $server_ip"
+    echo -e "${BLUE}Port:${NC} $XRAY_PORT"
+    echo -e "${BLUE}Network:${NC} $XRAY_NETWORK"
+    echo -e "${BLUE}Security:${NC} $XRAY_SECURITY"
+    echo -e "${BLUE}Flow:${NC} $flow"
+    
+    if [ "$XRAY_SECURITY" = "reality" ]; then
+        echo -e "${BLUE}SNI:${NC} ${XRAY_REALITY_SERVER_NAMES%%,*}"
+        echo -e "${BLUE}Fingerprint:${NC} chrome"
+        echo -e "${BLUE}Public Key:${NC} $XRAY_REALITY_PUBLIC_KEY"
+        echo -e "${BLUE}Short ID:${NC} $XRAY_REALITY_SHORT_IDS"
+    finformation${NC}"
     echo -e "${CYAN}============================================================${NC}"
     echo -e "${BLUE}Email:${NC} $email"
     echo -e "${BLUE}UUID:${NC} $uuid"
@@ -289,12 +326,23 @@ show_status() {
     if docker ps | grep -q xray-server; then
         print_success "Xray container is running"
         echo ""
-        docker ps --filter name=xray-server --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    local server_ip=$(hostname -I | awk '{print $1}')
+    print_info "Current configuration:"
+    echo -e "${BLUE}Server IP:${NC} $server_ip"
+    echo -e "${BLUE}Port:${NC} $XRAY_PORT"
+    echo -e "${BLUE}Network:${NC} $XRAY_NETWORK"
+    echo -e "${BLUE}Security:${NC} $XRAY_SECURITY"
+    echo -e "${BLUE}Flow:${NC} $XRAY_FLOW"
+    
+    if [ "$XRAY_SECURITY" = "reality" ]; then
         echo ""
-        
-        # Show recent logs
-        print_info "Recent logs (last 10 lines):"
-        docker logs --tail 10 xray-server
+        echo -e "${BLUE}Reality Settings:${NC}"
+        echo -e "${BLUE}  Destination:${NC} $XRAY_REALITY_DEST"
+        echo -e "${BLUE}  Server Names:${NC} $XRAY_REALITY_SERVER_NAMES"
+        echo -e "${BLUE}  Public Key:${NC} $XRAY_REALITY_PUBLIC_KEY"
+        echo -e "${BLUE}  Short IDs:${NC} $XRAY_REALITY_SHORT_IDS"
+    fi
+    
     else
         print_error "Xray container is not running"
         print_info "Start it with: docker start xray-server"

@@ -46,7 +46,7 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_ocserv.sh" "setup_fw.sh")
+REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_ocserv.sh" "setup_xray.sh" "setup_fw.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
@@ -250,6 +250,16 @@ fi
 print_message "✓ Cloudflare Zero Trust Access configured"
 echo ""
 
+# 5.5: Setup Xray Docker VPN Server (VLESS + Reality)
+print_message "--- Running setup_xray.sh ---"
+./setup_xray.sh
+if [[ $? -ne 0 ]]; then
+    print_error "Xray VPN setup failed!"
+    exit 1
+fi
+print_message "✓ Xray VPN Server configured"
+echo ""
+
 # ============================================================
 # Step 6: Configure Final Firewall Rules
 # ============================================================
@@ -279,6 +289,7 @@ echo -e "  ✓ VNC Server with $VNC_USER_COUNT user(s)"
 echo -e "  ✓ L2TP/IPsec VPN (for VPN_APPS in VNC sessions)"
 echo -e "  ✓ Cloudflare Zero Trust Access (SSH/VNC)"
 echo -e "  ✓ OpenConnect VPN Server (ocserv)"
+echo -e "  ✓ Xray Reality VPN (VLESS + Reality protocol)"
 echo -e "  ✓ Virtual Router for VPN traffic"
 echo ""
 
@@ -316,9 +327,15 @@ echo -e "2. ${BLUE}Use L2TP for VPN_APPS (in VNC session):${NC}"
 echo -e "   Run: ${CYAN}sudo ./run_vpn.sh${NC}"
 echo -e "   Routes apps: ${GREEN}$VPN_APPS${NC}"
 echo -e ""
-echo -e "3. ${BLUE}Monitor services:${NC}"
+echo -e "3. ${BLUE}Use Xray Reality VPN (for DPI bypass):${NC}"
+echo -e "   Manage users: ${CYAN}sudo ./manage_xray.sh add user@email.com${NC}"
+echo -e "   Show QR code: ${CYAN}sudo ./manage_xray.sh qr user@email.com${NC}"
+echo -e "   See full guide: ${CYAN}XRAY_REALITY_GUIDE.md${NC}"
+echo -e ""
+echo -e "4. ${BLUE}Monitor services:${NC}"
 echo -e "   - VNC: ${CYAN}systemctl status vncserver-<username>@<display>${NC}"
 echo -e "   - Cloudflare: ${CYAN}systemctl status cloudflared${NC}"
+echo -e "   - Xray: ${CYAN}docker ps | grep xray-server${NC}"
 echo -e ""
 
 echo -e "${GREEN}Setup completed at $(date)${NC}"

@@ -1,6 +1,6 @@
 # Secure Remote Access Gateway with Cloudflare Zero Trust
 
-**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access, OpenConnect VPN for secure internet access, and L2TP for app-specific routing in VNC sessions.**
+**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access, OpenConnect VPN for secure internet access, Xray Reality VPN for bypassing DPI filtering, and L2TP for app-specific routing in VNC sessions.**
 
 ---
 
@@ -10,6 +10,7 @@ This setup provides comprehensive secure remote access:
 
 - **Cloudflare Zero Trust**: Identity-aware SSH/VNC access management
 - **OpenConnect VPN (ocserv)**: AnyConnect-compatible VPN server for secure internet access
+- **Xray Reality VPN**: VLESS + Reality protocol for bypassing DPI filtering (ideal for Iran)
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
 ```
@@ -68,6 +69,7 @@ TRAFFIC FLOWS:
 
 - ✅ **Cloudflare Zero Trust** - Identity-aware SSH/VNC access (Gmail + OTP)
 - ✅ **OpenConnect VPN Server** - AnyConnect-compatible VPN (port 443, looks like HTTPS)
+- ✅ **Xray Reality VPN** - VLESS + Reality for bypassing DPI filtering (Docker-based)
 - ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions
 - ✅ **Multiple VNC Users** - Individual desktop sessions per user
 - ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
@@ -470,7 +472,74 @@ sudo ./setup_fw.sh
 - Modify `FIREWALL_ALLOWED_PORTS` only if you need additional services
 
 ---
+Xray Reality VPN (VLESS + Reality)
 
+Xray with Reality protocol is designed to bypass Deep Packet Inspection (DPI) filtering by mimicking legitimate HTTPS traffic to trusted websites. This makes it highly resilient against filtering systems used in Iran and other countries.
+
+### Why Use Xray Reality?
+
+- **No recognizable fingerprints**: Eliminates patterns that DPI uses to detect VPNs
+- **Mimics legitimate traffic**: Initial handshake identical to connection to Microsoft/Cloudflare
+- **No SSL certificates needed**: Uses SNI spoofing instead of TLS certificates
+- **XTLS-Vision flow**: Removes detectable characteristics of other protocols
+
+### Quick Start
+
+The Xray setup is included in the main setup script:
+
+```bash
+sudo ./setup_ws.sh
+```
+
+Or install separately:
+
+```bash
+sudo ./setup_xray.sh
+```
+
+### User Management
+
+```bash
+# Add new user
+sudo ./manage_xray.sh add user@email.com
+
+# Remove user
+sudo ./manage_xray.sh remove user@email.com
+
+# List all users
+sudo ./manage_xray.sh list
+
+# Show QR code for easy mobile setup
+sudo ./manage_xray.sh qr user@email.com
+
+# Check server status
+sudo ./manage_xray.sh status
+```
+
+### Client Setup (Android - v2rayNG)
+
+1. Install v2rayNG from Google Play or GitHub
+2. Scan QR code from `manage_xray.sh qr` command
+3. Or manually configure:
+   - Address: YOUR_SERVER_IP
+   - Port: 443
+   - UUID: <from setup>
+   - Flow: xtls-rprx-vision
+   - Security: reality
+   - SNI: www.microsoft.com
+   - Fingerprint: chrome
+   - Public Key: <from setup>
+   - ShortId: <from setup>
+
+### Detailed Documentation
+
+For complete guide, see:
+- **[XRAY_REALITY_GUIDE.md](XRAY_REALITY_GUIDE.md)** - Full setup and configuration guide
+- **[XRAY_QUICK_REF.md](XRAY_QUICK_REF.md)** - Quick reference card
+
+---
+
+## 
 ## License
 
 See [LICENSE](LICENSE) file.

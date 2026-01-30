@@ -1,9 +1,9 @@
 #!/bin/bash
 # ============================================================
-# Xray VPN Server Setup Script
+# Xray VPN Server Setup Script (VLESS + Reality)
 # ============================================================
-# This script sets up Xray-core in Docker mode with VLESS protocol
-# Uses Cloudflare proxied subdomain for secure access
+# This script sets up Xray-core in Docker mode with VLESS + Reality protocol
+# Reality protocol mimics legitimate HTTPS traffic to bypass DPI filtering
 # ============================================================
 
 set -e  # Exit on error
@@ -32,7 +32,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 print_info "============================================================"
-print_info "Starting Xray-core Setup in Docker Mode"
+print_info "Starting Xray-core Setup with VLESS + Reality Protocol"
 print_info "============================================================"
 
 # ============================================================
@@ -60,6 +60,71 @@ if [ -z "$XRAY_UUID" ] || [ "$XRAY_UUID" = "<auto_generated_uuid>" ]; then
 fi
 
 # ============================================================
+# Generate Reality Keys if not provided
+# ============================================================
+print_info "Generating Reality protocol keys..."
+
+# Pull Xray image first to use for key generation
+docker pull ghcr.io/xtls/xray-core:latest
+
+# Generate private key
+if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ "$XRAY_REALITY_PRIVATE_KEY" = "<auto_generated_private_key>" ]; then
+    XRAY_REALITY_PRIVATE_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest xray x25519)
+    print_warning "Generated new private key: $XRAY_REALITY_PRIVATE_KEY"
+    print_warning "Please update XRAY_REALITY_PRIVATE_KEY in workstation.env with this value"
+fi
+
+# Generate public key from private key
+if [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
+    XRAY_REALITY_PUBLIC_KEY=$(docker run --rm ghcr.io/xtls/xray-core:latest xray x25519 -i "$XRAY_REALITY_PRIVATE_KEY" | grep "Public key:" | awk '{print $3}')
+    print_warning "Generated new public key: $XRAY_REALITY_PUBLIC_KEY"
+    print_warning "Please update XRAY_REALITY_PUBLIC_KEY in workstation.env with this value"
+fi
+
+# ============================================================
+# Generate Short IDs if not provided
+# ============================================================
+if [ -z "$XRAY_REALITY_SHORT_IDS" ]; then
+    # Generate a random 12-character hex short ID
+    XRAY_REALITY_SHORT_IDS=$(openssl rand -hex 6)
+    print_warning "Generated new short ID: $XRAY_REALITY_SHORT_IDS"
+    print_warning "Please update XRAY_REALITY_SHORT_IDS in workstation.env with this value"
+fi
+
+# Convert comma-separated short IDs to JSON array format
+IFS=',' read -ra SHORT_ID_ARRAY <<< "$XRAY_REALITY_SHORT_IDS"
+SHORT_IDS_JSON=""
+for sid in "${SHORT_ID_ARRAY[@]}"; do
+    sid=$(echo "$sid" | xargs)  # Trim whitespace
+    if [ -n "$sid" ]; then
+        if [ -z "$SHORT_IDS_JSON" ]; then
+            SHORT_IDS_JSON="\"$sid\""
+        else
+            SHORT_IDS_JSON="$SHORT_IDS_JSON,\"$sid\""
+        fi
+    fi
+done
+
+# If no short IDs were provided or generated, use empty string
+if [ -z "$SHORT_IDS_JSON" ]; then
+    SHORT_IDS_JSON='""'
+fi
+
+# Convert comma-separated server names to JSON array format
+IFS=',' read -ra SERVER_NAME_ARRAY <<< "$XRAY_REALITY_SERVER_NAMES"
+SERVER_NAMES_JSON=""
+for sn in "${SERVER_NAME_ARRAY[@]}"; do
+    sn=$(echo "$sn" | xargs)  # Trim whitespace
+    if [ -n "$sn" ]; then
+        if [ -z "$SERVER_NAMES_JSON" ]; then
+            SERVER_NAMES_JSON="\"$sn\""
+        else
+            SERVER_NAMES_JSON="$SERVER_NAMES_JSON,\"$sn\""
+        fi
+    fi
+done
+
+# ============================================================
 # Create Xray configuration directory
 # ============================================================
 XRAY_CONFIG_DIR="/etc/xray"
@@ -67,9 +132,9 @@ mkdir -p "$XRAY_CONFIG_DIR"
 print_info "Created Xray configuration directory: $XRAY_CONFIG_DIR"
 
 # ============================================================
-# Generate Xray Configuration File
+# Generate Xray Configuration File (VLESS + Reality)
 # ============================================================
-print_info "Generating Xray configuration..."
+print_info "Generating Xray configuration with Reality protocol..."
 
 cat > "$XRAY_CONFIG_DIR/config.json" <<EOF
 {
@@ -86,27 +151,24 @@ cat > "$XRAY_CONFIG_DIR/config.json" <<EOF
             "id": "$XRAY_UUID",
             "flow": "$XRAY_FLOW",
             "level": 0,
-            "email": "user@xray"
+            "email": "user@reality"
           }
         ],
-        "decryption": "none",
-        "fallbacks": [
-          {
-            "dest": 80
-          }
-        ]
+        "decryption": "none"
       },
       "streamSettings": {
         "network": "$XRAY_NETWORK",
         "security": "$XRAY_SECURITY",
-        "tlsSettings": {
-          "serverName": "$XRAY_PANEL_DOMAIN",
-          "alpn": ["h2", "http/1.1"],
-          "certificates": [
-            {
-              "certificateFile": "/etc/xray/cert.pem",
-              "keyFile": "/etc/xray/key.pem"
-            }
+        "realitySettings": {
+          "show": false,
+          "dest": "$XRAY_REALITY_DEST",
+          "xver": 0,
+          "serverNames": [
+            $SERVER_NAMES_JSON
+          ],
+          "privateKey": "$XRAY_REALITY_PRIVATE_KEY",
+          "shortIds": [
+            $SHORT_IDS_JSON
           ]
         }
       }
@@ -115,7 +177,8 @@ cat > "$XRAY_CONFIG_DIR/config.json" <<EOF
   "outbounds": [
     {
       "protocol": "freedom",
-      "settings": {}
+      "settings": {},
+      "tag": "direct"
     },
     {
       "protocol": "blackhole",
@@ -135,71 +198,27 @@ cat > "$XRAY_CONFIG_DIR/config.json" <<EOF
 }
 EOF
 
-print_success "Xray configuration file created"
+print_success "Xray configuration file created with Reality protocol"
 
 # ============================================================
-# Setup SSL Certificates (Let's Encrypt or Self-Signed)
+# Stop and Remove Existing Container if Exists
 # ============================================================
-print_info "Setting up SSL certificates..."
-
-if [ "$XRAY_USE_ACME" = "true" ]; then
-    # Use acme.sh for Let's Encrypt certificates
-    print_info "Installing acme.sh for Let's Encrypt certificates..."
-    
-    if [ ! -d "/root/.acme.sh" ]; then
-        curl https://get.acme.sh | sh
-        source ~/.bashrc
-    fi
-    
-    # Issue certificate
-    /root/.acme.sh/acme.sh --issue -d "$XRAY_PANEL_DOMAIN" --standalone --force
-    
-    # Install certificate
-    /root/.acme.sh/acme.sh --installcert -d "$XRAY_PANEL_DOMAIN" \
-        --key-file "$XRAY_CONFIG_DIR/key.pem" \
-        --fullchain-file "$XRAY_CONFIG_DIR/cert.pem"
-    
-    print_success "Let's Encrypt certificates installed"
-else
-    # Use Cloudflare Origin certificates or self-signed
-    print_warning "Using Cloudflare Origin certificates or self-signed certificates"
-    print_warning "Please place your certificates in:"
-    print_warning "  - Certificate: $XRAY_CONFIG_DIR/cert.pem"
-    print_warning "  - Private Key: $XRAY_CONFIG_DIR/key.pem"
-    
-    # Create self-signed certificate if files don't exist
-    if [ ! -f "$XRAY_CONFIG_DIR/cert.pem" ] || [ ! -f "$XRAY_CONFIG_DIR/key.pem" ]; then
-        print_info "Generating self-signed certificate for testing..."
-        openssl req -x509 -newkey rsa:4096 -keyout "$XRAY_CONFIG_DIR/key.pem" \
-            -out "$XRAY_CONFIG_DIR/cert.pem" -days 365 -nodes \
-            -subj "/CN=$XRAY_PANEL_DOMAIN"
-        print_success "Self-signed certificate generated"
-    fi
-fi
-
-# Set proper permissions
-chmod 644 "$XRAY_CONFIG_DIR/cert.pem"
-chmod 600 "$XRAY_CONFIG_DIR/key.pem"
-
-# ============================================================
-# Pull and Run Xray Docker Container
-# ============================================================
-print_info "Pulling Xray-core Docker image..."
-docker pull ghcr.io/xtls/xray-core:latest
-
-# Stop and remove existing container if exists
 if docker ps -a | grep -q xray-server; then
     print_info "Stopping existing Xray container..."
-    docker stop xray-server
-    docker rm xray-server
+    docker stop xray-server 2>/dev/null || true
+    docker rm xray-server 2>/dev/null || true
 fi
 
-print_info "Starting Xray-core container..."
+# ============================================================
+# Run Xray Docker Container
+# ============================================================
+print_info "Starting Xray-core container with Reality protocol..."
 docker run -d \
     --name xray-server \
     --restart unless-stopped \
     -v "$XRAY_CONFIG_DIR":/etc/xray \
     -p "$XRAY_PORT:$XRAY_PORT" \
+    --network host \
     ghcr.io/xtls/xray-core:latest \
     run -c /etc/xray/config.json
 
@@ -220,7 +239,7 @@ fi
 # ============================================================
 print_info "Configuring firewall for Xray..."
 if command -v ufw &> /dev/null; then
-    ufw allow "$XRAY_PORT/tcp" comment "Xray VLESS"
+    ufw allow "$XRAY_PORT/tcp" comment "Xray VLESS Reality"
     print_success "UFW firewall rule added for port $XRAY_PORT"
 elif command -v firewall-cmd &> /dev/null; then
     firewall-cmd --permanent --add-port="$XRAY_PORT/tcp"
@@ -229,30 +248,56 @@ elif command -v firewall-cmd &> /dev/null; then
 fi
 
 # ============================================================
+# Get Server IP Address
+# ============================================================
+SERVER_IP=$(hostname -I | awk '{print $1}')
+if [ -z "$SERVER_IP" ]; then
+    SERVER_IP="YOUR_SERVER_IP"
+fi
+
+# ============================================================
 # Display Connection Information
 # ============================================================
 print_success "============================================================"
-print_success "Xray-core Setup Complete!"
+print_success "Xray-core Setup Complete with VLESS + Reality!"
 print_success "============================================================"
 echo ""
 print_info "Connection Details:"
-echo -e "${BLUE}Domain:${NC} $XRAY_PANEL_DOMAIN"
+echo -e "${BLUE}Server IP:${NC} $SERVER_IP"
 echo -e "${BLUE}Port:${NC} $XRAY_PORT"
-echo -e "${BLUE}UUID:${NC} $XRAY_UUID"
-echo -e "${BLUE}Network:${NC} $XRAY_NETWORK"
-echo -e "${BLUE}Security:${NC} $XRAY_SECURITY"
+echo -e "${BLUE}Protocol:${NC} VLESS"
+echo -e "${BLUE}Security:${NC} Reality"
 echo -e "${BLUE}Flow:${NC} $XRAY_FLOW"
 echo ""
+echo -e "${BLUE}UUID:${NC} $XRAY_UUID"
+echo -e "${BLUE}Public Key:${NC} $XRAY_REALITY_PUBLIC_KEY"
+echo -e "${BLUE}Short ID(s):${NC} $XRAY_REALITY_SHORT_IDS"
+echo -e "${BLUE}SNI:${NC} ${XRAY_REALITY_SERVER_NAMES%%,*}"
+echo -e "${BLUE}Fingerprint:${NC} chrome"
+echo ""
 print_info "VLESS Connection String:"
-echo -e "${GREEN}vless://$XRAY_UUID@$XRAY_PANEL_DOMAIN:$XRAY_PORT?security=$XRAY_SECURITY&sni=$XRAY_PANEL_DOMAIN&type=$XRAY_NETWORK&flow=$XRAY_FLOW#Xray-VPS${NC}"
+echo -e "${GREEN}vless://$XRAY_UUID@$SERVER_IP:$XRAY_PORT?security=reality&sni=${XRAY_REALITY_SERVER_NAMES%%,*}&fp=chrome&pbk=$XRAY_REALITY_PUBLIC_KEY&sid=$XRAY_REALITY_SHORT_IDS&type=tcp&flow=$XRAY_FLOW#Xray-Reality${NC}"
 echo ""
 print_info "Container Status:"
 docker ps --filter name=xray-server --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 echo ""
 print_warning "Important Notes:"
-print_warning "1. Make sure to configure Cloudflare tunnel for $XRAY_PANEL_DOMAIN"
-print_warning "2. Save your UUID ($XRAY_UUID) securely"
-print_warning "3. Use v2rayN, v2rayNG, or compatible clients to connect"
-print_warning "4. Check container logs: docker logs xray-server"
+print_warning "1. Reality protocol mimics connection to $XRAY_REALITY_DEST"
+print_warning "2. No SSL certificates needed - Reality handles encryption"
+print_warning "3. Save your UUID and keys securely (they're in workstation.env)"
+print_warning "4. Use v2rayN, v2rayNG, or compatible clients to connect"
+print_warning "5. Client Configuration:"
+echo -e "   ${BLUE}→${NC} Address: $SERVER_IP"
+echo -e "   ${BLUE}→${NC} Port: $XRAY_PORT"
+echo -e "   ${BLUE}→${NC} UUID: $XRAY_UUID"
+echo -e "   ${BLUE}→${NC} Flow: $XRAY_FLOW"
+echo -e "   ${BLUE}→${NC} Security: reality"
+echo -e "   ${BLUE}→${NC} SNI: ${XRAY_REALITY_SERVER_NAMES%%,*}"
+echo -e "   ${BLUE}→${NC} Fingerprint: chrome"
+echo -e "   ${BLUE}→${NC} Public Key: $XRAY_REALITY_PUBLIC_KEY"
+echo -e "   ${BLUE}→${NC} Short ID: $XRAY_REALITY_SHORT_IDS"
+echo ""
+print_warning "6. Manage users with: sudo ./manage_xray.sh"
+print_warning "7. Check container logs: docker logs xray-server"
 echo ""
 print_success "Setup completed successfully!"
