@@ -60,18 +60,15 @@ fi
 # ============================================================
 print_info "Generating Reality protocol keys..."
 
-# Generate private key
-if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ "$XRAY_REALITY_PRIVATE_KEY" = "<auto_generated_private_key>" ]; then
-    XRAY_REALITY_PRIVATE_KEY=$(xray x25519)
-    print_warning "Generated new private key: $XRAY_REALITY_PRIVATE_KEY"
-    print_warning "Please update XRAY_REALITY_PRIVATE_KEY in workstation.env with this value"
-fi
-
-# Generate public key from private key
-if [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
-    XRAY_REALITY_PUBLIC_KEY=$(echo "$XRAY_REALITY_PRIVATE_KEY" | xray x25519 -i | grep "Public key:" | awk '{print $3}')
-    print_warning "Generated new public key: $XRAY_REALITY_PUBLIC_KEY"
-    print_warning "Please update XRAY_REALITY_PUBLIC_KEY in workstation.env with this value"
+# Generate both private and public keys together
+if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ "$XRAY_REALITY_PRIVATE_KEY" = "<auto_generated_private_key>" ] || [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
+    KEY_OUTPUT=$(xray x25519)
+    XRAY_REALITY_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep "Private key:" | awk '{print $3}')
+    XRAY_REALITY_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep "Public key:" | awk '{print $3}')
+    print_warning "Generated new keys:"
+    print_warning "  Private key: $XRAY_REALITY_PRIVATE_KEY"
+    print_warning "  Public key: $XRAY_REALITY_PUBLIC_KEY"
+    print_warning "Please update both keys in workstation.env"
 fi
 
 # ============================================================
