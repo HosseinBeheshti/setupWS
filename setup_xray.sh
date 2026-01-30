@@ -135,7 +135,7 @@ done
 # ============================================================
 # Create Xray configuration directory
 # ============================================================
-XRAY_CONFIG_DIR="/etc/xray"
+XRAY_CONFIG_DIR="/usr/local/etc/xray"
 mkdir -p "$XRAY_CONFIG_DIR"
 print_info "Created Xray configuration directory: $XRAY_CONFIG_DIR"
 
@@ -212,6 +212,7 @@ print_success "Xray configuration file created with Reality protocol"
 # Enable and Start Xray Service
 # ============================================================
 print_info "Enabling and starting Xray service..."
+setcap cap_net_bind_service=+ep /usr/local/bin/xray
 systemctl enable xray
 systemctl restart xray
 
