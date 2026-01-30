@@ -52,7 +52,10 @@ fi
 if [ -z "$XRAY_UUID" ] || [ "$XRAY_UUID" = "<auto_generated_uuid>" ]; then
     XRAY_UUID=$(cat /proc/sys/kernel/random/uuid)
     print_warning "Generated new UUID: $XRAY_UUID"
-    print_warning "Please update XRAY_UUID in workstation.env with this value"
+    
+    # Save to workstation.env
+    sed -i "s|XRAY_UUID=\"<auto_generated_uuid>\"|XRAY_UUID=\"$XRAY_UUID\"|g" "$SCRIPT_DIR/workstation.env"
+    print_success "UUID saved to workstation.env"
 fi
 
 # ============================================================
@@ -62,23 +65,38 @@ print_info "Generating Reality protocol keys..."
 
 # Generate both private and public keys together
 if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ "$XRAY_REALITY_PRIVATE_KEY" = "<auto_generated_private_key>" ] || [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
-    KEY_OUTPUT=$(xray x25519)
-    XRAY_REALITY_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | grep "Private key:" | awk '{print $3}')
-    XRAY_REALITY_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | grep "Public key:" | awk '{print $3}')
+    KEY_OUTPUT=$(xray x25519 2>&1)
+    XRAY_REALITY_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | awk '/PrivateKey:/{print $2}')
+    XRAY_REALITY_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | awk '/Password:/{print $2}')
+    
+    if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ -z "$XRAY_REALITY_PUBLIC_KEY" ]; then
+        print_error "Failed to generate keys. xray x25519 output:"
+        echo "$KEY_OUTPUT"
+        exit 1
+    fi
+    
     print_warning "Generated new keys:"
     print_warning "  Private key: $XRAY_REALITY_PRIVATE_KEY"
     print_warning "  Public key: $XRAY_REALITY_PUBLIC_KEY"
-    print_warning "Please update both keys in workstation.env"
+    
+    # Save to workstation.env
+    print_info "Saving keys to workstation.env..."
+    sed -i "s|XRAY_REALITY_PRIVATE_KEY=\"<auto_generated_private_key>\"|XRAY_REALITY_PRIVATE_KEY=\"$XRAY_REALITY_PRIVATE_KEY\"|g" "$SCRIPT_DIR/workstation.env"
+    sed -i "s|XRAY_REALITY_PUBLIC_KEY=\"<auto_generated_public_key>\"|XRAY_REALITY_PUBLIC_KEY=\"$XRAY_REALITY_PUBLIC_KEY\"|g" "$SCRIPT_DIR/workstation.env"
+    print_success "Keys saved to workstation.env"
 fi
 
 # ============================================================
 # Generate Short IDs if not provided
 # ============================================================
 if [ -z "$XRAY_REALITY_SHORT_IDS" ]; then
-    # Generate a random 12-character hex short ID
     XRAY_REALITY_SHORT_IDS=$(openssl rand -hex 6)
     print_warning "Generated new short ID: $XRAY_REALITY_SHORT_IDS"
-    print_warning "Please update XRAY_REALITY_SHORT_IDS in workstation.env with this value"
+    
+    # Save to workstation.env
+    print_info "Saving short ID to workstation.env..."
+    sed -i "s|XRAY_REALITY_SHORT_IDS=\"\"|XRAY_REALITY_SHORT_IDS=\"$XRAY_REALITY_SHORT_IDS\"|g" "$SCRIPT_DIR/workstation.env"
+    print_success "Short ID saved to workstation.env"
 fi
 
 # Convert comma-separated short IDs to JSON array format
@@ -246,7 +264,7 @@ echo -e "${BLUE}Flow:${NC} $XRAY_FLOW"
 echo ""
 echo -e "${BLUE}UUID:${NC} $XRAY_UUID"
 echo -e "${BLUE}Public Key:${NC} $XRAY_REALITY_PUBLIC_KEY"
-echo -e "${BLUE}Short ID(s):${NC} $XRAY_REALITY_SHORT_IDS"
+echo -e "${BLUE}Short IDs:${NC} $XRAY_REALITY_SHORT_IDS"
 echo -e "${BLUE}SNI:${NC} ${XRAY_REALITY_SERVER_NAMES%%,*}"
 echo -e "${BLUE}Fingerprint:${NC} chrome"
 echo ""
@@ -259,7 +277,7 @@ echo ""
 print_warning "Important Notes:"
 print_warning "1. Reality protocol mimics connection to $XRAY_REALITY_DEST"
 print_warning "2. No SSL certificates needed - Reality handles encryption"
-print_warning "3. Save your UUID and keys securely (stored in workstation.env)"
+print_warning "3. Save your UUID and keys securely - stored in workstation.env"
 print_warning "4. Use v2rayN, v2rayNG, or compatible clients to connect"
 print_warning "5. Client Configuration:"
 echo -e "   ${BLUE}→${NC} Address: $SERVER_IP"
