@@ -276,6 +276,14 @@ show_qr() {
     
     if [ -z "$user_data" ]; then
         print_error "User '$email' not found"
+        exit 1
+    fi
+    
+    local uuid=$(echo "$user_data" | jq -r '.id')
+    local flow=$(echo "$user_data" | jq -r '.flow')
+    
+    # Generate VLESS URL
+    local vless_url=$(get_vless_url "$uuid" "$email")
     local server_ip=$(hostname -I | awk '{print $1}')
     
     echo ""
@@ -295,16 +303,9 @@ show_qr() {
         echo -e "${BLUE}Fingerprint:${NC} chrome"
         echo -e "${BLUE}Public Key:${NC} $XRAY_REALITY_PUBLIC_KEY"
         echo -e "${BLUE}Short ID:${NC} $XRAY_REALITY_SHORT_IDS"
-    finformation${NC}"
-    echo -e "${CYAN}============================================================${NC}"
-    echo -e "${BLUE}Email:${NC} $email"
-    echo -e "${BLUE}UUID:${NC} $uuid"
-    echo -e "${BLUE}Domain:${NC} $XRAY_PANEL_DOMAIN"
-    echo -e "${BLUE}Port:${NC} $XRAY_PORT"
-    echo -e "${BLUE}Network:${NC} $XRAY_NETWORK"
-    echo -e "${BLUE}Security:${NC} $XRAY_SECURITY"
-    echo -e "${BLUE}Flow:${NC} $flow"
+    fi
     echo ""
+    
     echo -e "${GREEN}VLESS Connection String:${NC}"
     echo "$vless_url"
     echo ""
@@ -326,6 +327,22 @@ show_status() {
     if docker ps | grep -q xray-server; then
         print_success "Xray container is running"
         echo ""
+        docker ps --filter name=xray-server --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+        echo ""
+        
+        # Show recent logs
+        print_info "Recent logs (last 10 lines):"
+        docker logs --tail 10 xray-server
+    else
+        print_error "Xray container is not running"
+        print_info "Start it with: docker start xray-server"
+    fi
+}
+
+# ============================================================
+# Update Config Function
+# ============================================================
+update_config() {
     local server_ip=$(hostname -I | awk '{print $1}')
     print_info "Current configuration:"
     echo -e "${BLUE}Server IP:${NC} $server_ip"
@@ -343,22 +360,6 @@ show_status() {
         echo -e "${BLUE}  Short IDs:${NC} $XRAY_REALITY_SHORT_IDS"
     fi
     
-    else
-        print_error "Xray container is not running"
-        print_info "Start it with: docker start xray-server"
-    fi
-}
-
-# ============================================================
-# Update Config Function
-# ============================================================
-update_config() {
-    print_info "Current configuration:"
-    echo -e "${BLUE}Domain:${NC} $XRAY_PANEL_DOMAIN"
-    echo -e "${BLUE}Port:${NC} $XRAY_PORT"
-    echo -e "${BLUE}Network:${NC} $XRAY_NETWORK"
-    echo -e "${BLUE}Security:${NC} $XRAY_SECURITY"
-    echo -e "${BLUE}Flow:${NC} $XRAY_FLOW"
     echo ""
     print_warning "To update configuration, edit workstation.env and run setup_xray.sh again"
 }
