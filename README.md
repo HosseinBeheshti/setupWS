@@ -1,6 +1,6 @@
 # Secure Remote Access Gateway with Cloudflare Zero Trust
 
-**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access, OpenConnect VPN for secure internet access, Xray Reality VPN for bypassing DPI filtering, SSH Farm with badVPN-udpgw, and L2TP for app-specific routing in VNC sessions.**
+**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access, Xray Reality VPN for bypassing DPI filtering, SSH Farm with SSH tunneling, and L2TP for app-specific routing in VNC sessions.**
 
 ---
 
@@ -9,9 +9,8 @@
 This setup provides comprehensive secure remote access:
 
 - **Cloudflare Zero Trust**: Identity-aware SSH/VNC access management
-- **OpenConnect VPN (ocserv)**: AnyConnect-compatible VPN server for secure internet access
 - **Xray Reality VPN**: VLESS + Reality protocol for bypassing DPI filtering (ideal for Iran)
-- **SSH Farm**: Multiple SSH servers with badVPN-udpgw (UDP-over-TCP tunneling)
+- **SSH Farm**: Multiple SSH servers with SSH tunneling support (for VPN apps like NekoBox)
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
 ```
@@ -40,28 +39,28 @@ This setup provides comprehensive secure remote access:
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │                        ACCESS POINTS                                 │  │
 │  │                                                                      │  │
-│  │  ┌───────────────┐  ┌──────────────┐  ┌─────────────────────────┐  │  │
-│  │  │ cloudflared   │  │ OpenConnect  │  │  Xray Reality VPN       │  │  │
-│  │  │ SSH/VNC Tunnel│  │ VPN (ocserv) │  │  (VLESS + Reality)      │  │  │
-│  │  │               │  │ Port: 443    │  │  Port: 2053             │  │  │
-│  │  └───────┬───────┘  └──────┬───────┘  └──────────┬──────────────┘  │  │
-│  └──────────┼──────────────────┼─────────────────────┼─────────────────┘  │
-│             │                  │                     │                     │
-│             ▼                  ▼                     ▼                     │
-│  ┌──────────────────┐  ┌──────────────┐  ┌─────────────────────────────┐  │
-│  │  VNC Sessions    │  │  IP Routing  │  │  L2TP/IPsec VPN Server      │  │
-│  │  :5910,:5911,... │  │  & NAT       │  │  Ports: 500,1701,4500 (UDP) │  │
-│  └──────────────────┘  └──────────────┘  └─────────────────────────────┘  │
+│  │  ┌───────────────┐  ┌─────────────────────────┐                    │  │
+│  │  │ cloudflared   │  │  Xray Reality VPN       │                    │  │
+│  │  │ SSH/VNC Tunnel│  │  (VLESS + Reality)      │                    │  │
+│  │  │               │  │  Port: 2053             │                    │  │
+│  │  └───────┬───────┘  └──────────┬──────────────┘                    │  │
+│  └──────────┼─────────────────────┼───────────────────────────────────┘  │
+│             │                     │                                       │
+│             ▼                     ▼                                       │
+│  ┌──────────────────┐  ┌─────────────────────────────┐                  │
+│  │  VNC Sessions    │  │  L2TP/IPsec VPN Server      │                  │
+│  │  :5910,:5911,... │  │  Ports: 500,1701,4500 (UDP) │                  │
+│  └──────────────────┘  └─────────────────────────────┘                  │
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │                      SSH FARM (Docker Containers)                    │  │
-│  │                      with badVPN-udpgw (UDP-over-TCP)                │  │
+│  │                      SSH Tunneling Enabled (for VPN apps)            │  │
 │  │                                                                      │  │
 │  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐   │  │
 │  │  │ SSH Server  │ │ SSH Server  │ │ SSH Server  │ │    ...      │   │  │
 │  │  │ user1       │ │ user2       │ │ user3       │ │             │   │  │
 │  │  │ Port: 8080  │ │ Port: 8880  │ │ Port: 2052  │ │ 2082,2086   │   │  │
-│  │  │ UDPGW: 7300 │ │ UDPGW: 7300 │ │ UDPGW: 7300 │ │ 2095,9443...│   │  │
+│  │  │ Tunneling✓  │ │ Tunneling✓  │ │ Tunneling✓  │ │ 2095,9443...│   │  │
 │  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘   │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
@@ -81,18 +80,16 @@ ACCESS METHODS & PORTS:
 1. SSH/VNC Access (via Cloudflare):
    → Client → Cloudflare Edge → cloudflared → localhost:22 (SSH) / :5910+ (VNC)
    
-2. OpenConnect VPN (AnyConnect):
-   → Port 443 (TCP/UDP) → Full traffic routing through VPS
-   
-3. Xray Reality VPN (Anti-DPI):
+2. Xray Reality VPN (Anti-DPI):
    → Port 2053 (TCP) → VLESS + Reality → Bypasses DPI filtering
    
-4. L2TP/IPsec VPN Server:
+3. L2TP/IPsec VPN Server:
    → Ports 500 (UDP), 1701 (UDP), 4500 (UDP) → App-specific routing in VNC
    
-5. SSH Farm (Direct Access):
+4. SSH Farm (Direct Access - SSH Tunneling):
    → Ports 8080, 8880, 2052, 2082, 2086, 2095, 9443, 2083, 2087, 2096...
-   → Each container: badVPN-udpgw on 127.0.0.1:7300 (UDP-over-TCP tunneling)
+   → SSH tunneling enabled (AllowTcpForwarding, PermitTunnel)
+   → Use with NekoBox, OpenVPN, or any SSH tunnel-based VPN
    → Users: sshfarm_user1, sshfarm_user2, sshfarm_user3...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -100,9 +97,8 @@ ACCESS METHODS & PORTS:
 ### What You Get
 
 - ✅ **Cloudflare Zero Trust** - Identity-aware SSH/VNC access (Gmail + OTP)
-- ✅ **OpenConnect VPN Server** - AnyConnect-compatible VPN (port 443, looks like HTTPS)
 - ✅ **Xray Reality VPN** - VLESS + Reality for bypassing DPI filtering (Docker-based)
-- ✅ **SSH Farm** - Multiple SSH servers with badVPN-udpgw (UDP-over-TCP tunneling)
+- ✅ **SSH Farm** - Multiple SSH servers with tunneling support (works with NekoBox, OpenVPN)
 - ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions
 - ✅ **Multiple VNC Users** - Individual desktop sessions per user
 - ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
@@ -113,9 +109,8 @@ ACCESS METHODS & PORTS:
 
 - **VPS**: Ubuntu 24.04 with public IP
 - **Cloudflare Account**: Free tier (for Zero Trust Access)
-- **Domain**: A domain with DNS managed by Cloudflare (for OpenConnect VPN hostname)
 - **Email**: Gmail address for authentication
-- **Clients**: client apps for VPN, Cloudflare One Agent for SSH/VNC
+- **Clients**: Cloudflare One Agent for SSH/VNC, v2rayNG for Xray, NekoBox for SSH tunneling
 
 ---
 
@@ -290,16 +285,14 @@ If you want to access VNC through Cloudflare (recommended):
 
 3. **Configure required settings** in `workstation.env`:
    - `CLOUDFLARE_TUNNEL_TOKEN`: Your tunnel token from Part 1.3
-   - `OCSERV_HOSTNAME`: Your VPN domain (e.g., vpn.yourdomain.com)
-     - Create an A record in Cloudflare DNS pointing to your VPS IP
-     - **Important**: Set DNS to "DNS only" (disable proxy/orange cloud)
    - `VPS_PUBLIC_IP`: Your VPS public IP address
    - `VNCUSER*_PASSWORD`: Set strong passwords for VNC users
    - `L2TP_*`: L2TP VPN credentials if using VPN_APPS routing
    - `SSH_FARM_PORTS`: Comma-separated list of ports for SSH servers
-   - `SSH_FARM_PASSWORD`: Shared password for all SSH farm users
+   - `SSH_FARM_PASSWORD`: Auto-generated if not set (or set your own)
+   - `XRAY_LISTENING_PORT`: Xray VPN port (default: 2053)
    - `FIREWALL_ALLOWED_PORTS`: Ports to allow through firewall
-     - Default: `500/udp,1701/udp,4500/udp,443` (L2TP + OpenConnect)
+     - Default: `500/udp,1701/udp,4500/udp,2053/tcp` (L2TP + Xray)
      - Leave empty for Cloudflare tunnel-only access (most secure)
 
 4. **Save and exit** (`:wq` in vim)
@@ -315,15 +308,14 @@ sudo ./setup_ws.sh
 ```
 
 **What this does:**
-1. Installs all required packages (VNC, L2TP, Docker, VS Code, Chrome, ocserv, etc.)
+1. Installs all required packages (VNC, L2TP, Docker, VS Code, Chrome, etc.)
 2. Configures virtual router for VPN traffic
 3. Sets up L2TP/IPsec for VPN_APPS routing in VNC sessions
 4. Creates VNC servers for each user
 5. Installs cloudflared and configures Cloudflare tunnel for secure access
-6. Installs and configures OpenConnect VPN server (ocserv)
-7. Sets up Xray Reality VPN (VLESS + Reality protocol)
-8. Deploys SSH Farm with badVPN-udpgw (multiple SSH servers)
-9. Configures secure firewall with custom port rules from workstation.env
+6. Sets up Xray Reality VPN (VLESS + Reality protocol)
+7. Deploys SSH Farm with SSH tunneling (multiple SSH servers)
+8. Configures secure firewall with custom port rules from workstation.env
 
 **Duration**: 10-15 minutes depending on VPS speed.
 
@@ -407,7 +399,8 @@ The setup includes a centralized firewall configuration via `setup_fw.sh`:
 ### Default Configuration
 - **All incoming ports blocked** except those specified in `FIREWALL_ALLOWED_PORTS`
 - **L2TP/IPsec ports**: UDP 500, 1701, 4500 (for L2TP VPN)
-- **OpenConnect VPN**: Port 443 TCP/UDP (for ocserv)
+- **Xray Reality VPN**: Port 2053 TCP (for VLESS + Reality)
+- **SSH Farm**: Ports 8080, 8880, 2052, etc. (automatically opened)
 - **SSH/VNC access**: Only through Cloudflare tunnel (most secure)
 
 ### Customizing Firewall Rules
@@ -416,17 +409,17 @@ Edit `FIREWALL_ALLOWED_PORTS` in `workstation.env`:
 
 ```bash
 # Examples:
-# Default (L2TP + OpenConnect):
-FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp,443"
+# Default (L2TP + Xray):
+FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp,2053/tcp"
 
 # With SSH Farm ports (automatically added by setup_sshfarm.sh):
-FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp,443,8080/tcp,8880/tcp,2052/tcp"
+FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp,2053/tcp,8080/tcp,8880/tcp,2052/tcp"
 
-# OpenConnect only:
-FIREWALL_ALLOWED_PORTS="443"
+# Xray only:
+FIREWALL_ALLOWED_PORTS="2053/tcp"
 
-# Add custom web ports:
-FIREWALL_ALLOWED_PORTS="80/tcp,443,500/udp,1701/udp,4500/udp"
+# SSH Farm only:
+FIREWALL_ALLOWED_PORTS="8080/tcp,8880/tcp,2052/tcp,2082/tcp"
 
 # Cloudflare tunnel-only (most secure, no direct access):
 FIREWALL_ALLOWED_PORTS=""
@@ -443,21 +436,23 @@ sudo ./setup_fw.sh
 - Direct SSH/VNC access is **always blocked** for security
 - All SSH/VNC access **must go through Cloudflare tunnel**
 - L2TP ports (500, 1701, 4500) are opened for L2TP VPN connectivity
-- OpenConnect port (443) is opened for VPN access
+- Xray port (2053) is opened for Reality VPN access
+- SSH Farm ports are automatically opened by setup script
 - Modify `FIREWALL_ALLOWED_PORTS` only if you need additional services
 
 ---
 
-## SSH Farm with badVPN-udpgw
+## SSH Farm with SSH Tunneling
 
-Multiple SSH servers for load distribution with UDP-over-TCP tunneling support.
+Multiple SSH servers for load distribution with SSH tunneling support (for VPN apps).
 
 ### Features
 
 - **Multiple SSH servers**: One container per configured port
-- **badVPN-udpgw**: UDP-over-TCP tunneling on port 7300 (internal)
-- **Shared password**: Same password for all farm users
+- **SSH Tunneling Enabled**: AllowTcpForwarding, PermitTunnel for VPN apps
+- **Shared password**: Auto-generated or set manually (same for all users)
 - **Unique usernames**: sshfarm_user1, sshfarm_user2, etc.
+- **Compatible with**: NekoBox, OpenVPN, any SSH tunnel-based VPN client
 
 ### Configuration
 
@@ -487,10 +482,18 @@ docker compose -f docker-compose-sshfarm.yml ps
 ### Connect
 
 ```bash
-# Connect to any server (e.g., user1 on port 8080)
-ssh sshfarm_user1@your-server-ip -p 8080
+# Direct SSH connection
+ssh -p 8080 sshfarm_user1@your-server-ip
 
-# badVPN-udpgw is available at 127.0.0.1:7300 inside each container
+# Create SOCKS5 tunnel (for use as VPN)
+ssh -p 8080 -D 1080 -N sshfarm_user1@your-server-ip
+
+# Use with NekoBox:
+# - Type: SSH
+# - Server: your-server-ip
+# - Port: 8080 (or any farm port)
+# - Username: sshfarm_user1
+# - Password: (from setup output)
 ```
 
 ---
