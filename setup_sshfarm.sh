@@ -249,6 +249,13 @@ print_message "✓ Firewall rules configured for ports: ${PORTS[*]}"
 # Verify setup
 print_header "Verifying Setup"
 
+# Clean up old SSH host keys for localhost ports
+print_message "Cleaning up old SSH host keys..."
+for PORT in "${PORTS[@]}"; do
+    ssh-keygen -f "$HOME/.ssh/known_hosts" -R "[localhost]:$PORT" 2>/dev/null || true
+    ssh-keygen -f "$HOME/.ssh/known_hosts" -R "[$VPS_PUBLIC_IP]:$PORT" 2>/dev/null || true
+done
+
 # Check if ports are listening
 print_message "Checking if SSH ports are accessible..."
 sleep 3
@@ -266,10 +273,16 @@ print_message "Testing local connection to first server..."
 FIRST_PORT="${PORTS[0]}"
 FIRST_USER="sshfarm_user1"
 
-if timeout 5 ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 -p "$FIRST_PORT" "$FIRST_USER@localhost" exit 2>/dev/null; then
-    echo -e "  ${GREEN}✓${NC} Local SSH connection successful"
+# Use sshpass for automated testing
+if command -v sshpass &> /dev/null; then
+    if timeout 5 sshpass -p "$SSH_FARM_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -p "$FIRST_PORT" "$FIRST_USER@localhost" exit 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} SSH connection test successful!"
+    else
+        echo -e "  ${YELLOW}⚠${NC} Connection test inconclusive (containers may still be initializing)"
+    fi
 else
-    echo -e "  ${YELLOW}⚠${NC} Local connection test failed (may need more initialization time)"
+    echo -e "  ${YELLOW}ℹ${NC} Install 'sshpass' for automated connection testing"
+    echo -e "  ${YELLOW}ℹ${NC} Manually test: ssh -p $FIRST_PORT $FIRST_USER@localhost"
 fi
 
 print_message ""
