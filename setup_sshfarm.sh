@@ -106,6 +106,68 @@ if [ ! -f /usr/local/bin/badvpn-udpgw ]; then
 else
     echo "badVPN-udpgw already installed"
 fi
+
+# Configure SSH for tunneling
+echo "Configuring SSH server for port forwarding and tunneling..."
+SSHD_CONFIG="/config/ssh_host_keys/sshd_config"
+
+# Create custom sshd_config if it doesn't exist
+if [ ! -f "$SSHD_CONFIG" ]; then
+    cat > "$SSHD_CONFIG" <<'SSHEOF'
+# SSH Server Configuration for Tunneling Support
+
+# Port and Protocol
+Port 2222
+Protocol 2
+
+# Host Keys
+HostKey /config/ssh_host_keys/ssh_host_rsa_key
+HostKey /config/ssh_host_keys/ssh_host_ecdsa_key
+HostKey /config/ssh_host_keys/ssh_host_ed25519_key
+
+# Logging
+SyslogFacility AUTH
+LogLevel INFO
+
+# Authentication
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication yes
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+
+# Tunneling and Port Forwarding - ENABLED FOR VPN USE
+AllowTcpForwarding yes
+X11Forwarding no
+AllowStreamLocalForwarding yes
+GatewayPorts no
+PermitTunnel yes
+
+# Session
+PrintMotd no
+PrintLastLog yes
+TCPKeepAlive yes
+Compression yes
+ClientAliveInterval 60
+ClientAliveCountMax 3
+
+# Subsystem
+Subsystem sftp /usr/lib/ssh/sftp-server
+
+# Security
+MaxAuthTries 6
+MaxSessions 10
+StrictModes yes
+SSHEOF
+    echo "Custom sshd_config created with tunneling enabled"
+else
+    # Update existing config to enable tunneling
+    sed -i 's/^AllowTcpForwarding.*/AllowTcpForwarding yes/' "$SSHD_CONFIG" 2>/dev/null || echo "AllowTcpForwarding yes" >> "$SSHD_CONFIG"
+    sed -i 's/^GatewayPorts.*/GatewayPorts no/' "$SSHD_CONFIG" 2>/dev/null || echo "GatewayPorts no" >> "$SSHD_CONFIG"
+    sed -i 's/^PermitTunnel.*/PermitTunnel yes/' "$SSHD_CONFIG" 2>/dev/null || echo "PermitTunnel yes" >> "$SSHD_CONFIG"
+    sed -i 's/^AllowStreamLocalForwarding.*/AllowStreamLocalForwarding yes/' "$SSHD_CONFIG" 2>/dev/null || echo "AllowStreamLocalForwarding yes" >> "$SSHD_CONFIG"
+    echo "sshd_config updated with tunneling support"
+fi
 INITSCRIPT
     
     chmod +x "./sshfarm_data/${CONTAINER_NAME}/custom-cont-init.d/install-badvpn.sh"
@@ -224,6 +286,22 @@ for i in "${!PORTS[@]}"; do
     echo ""
 done
 
+echo -e "-----------------------------------------------------"
+echo -e "${YELLOW}SSH Tunneling Guide (for NekoBox VPN):${NC}"
+echo -e ""
+echo -e "  ${CYAN}NekoBox Configuration:${NC}"
+echo -e "  1. Open NekoBox app"
+echo -e "  2. Add new profile → SSH"
+echo -e "  3. Configure:"
+echo -e "     Server:   ${GREEN}$VPS_PUBLIC_IP${NC}"
+echo -e "     Port:     ${GREEN}${PORTS[0]}${NC} (or any farm port)"
+echo -e "     Username: ${GREEN}sshfarm_user1${NC} (or user2, user3...)"
+echo -e "     Password: ${GREEN}$SSH_FARM_PASSWORD${NC}"
+echo -e ""
+echo -e "  ${CYAN}Command Line SOCKS5 Tunnel:${NC}"
+echo -e "  ${YELLOW}ssh -p ${PORTS[0]} -D 1080 -N sshfarm_user1@$VPS_PUBLIC_IP${NC}"
+echo -e "  (Then configure apps to use SOCKS5 proxy at localhost:1080)"
+echo -e ""
 echo -e "-----------------------------------------------------"
 echo -e "${YELLOW}SSH URLs (for easy import):${NC}"
 echo -e ""
