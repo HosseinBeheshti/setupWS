@@ -82,79 +82,26 @@ for i in "${!PORTS[@]}"; do
     
     print_message "  Configuring $USERNAME on port $PORT..."
     
-    # Create custom init script for badVPN
-    mkdir -p "./sshfarm_data/${CONTAINER_NAME}/custom-cont-init.d"
-    cat > "./sshfarm_data/${CONTAINER_NAME}/custom-cont-init.d/install-badvpn.sh" <<'INITSCRIPT'
-#!/usr/bin/with-contenv bash
-
-echo "Installing badVPN-udpgw..."
-
-# Install dependencies
-apk add --no-cache cmake gcc g++ make linux-headers git
-
-# Check if already installed
-if [ ! -f /usr/local/bin/badvpn-udpgw ]; then
-    cd /tmp
-    git clone https://github.com/ambrop72/badvpn.git
-    cd badvpn
-    mkdir build && cd build
-    cmake .. -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1
-    make install
-    cd /
-    rm -rf /tmp/badvpn
-    echo "badVPN-udpgw installed successfully"
-else
-    echo "badVPN-udpgw already installed"
-fi
-
-# Configure SSH for tunneling
-echo "Configuring SSH server for port forwarding and tunneling..."
-
-# Write sshd_config to proper location
-cat > /config/sshd_config <<'SSHEOF'
-# SSH Server Configuration for Tunneling Support
+    # Create config directory and sshd_config upfront
+    mkdir -p "./sshfarm_data/${CONTAINER_NAME}"
+    
+    # Create sshd_config that enables tunneling
+    cat > "./sshfarm_data/${CONTAINER_NAME}/sshd_config" <<'SSHCONFIG'
 Port 2222
-Protocol 2
-
-# Authentication
 PermitRootLogin no
 PubkeyAuthentication yes
 PasswordAuthentication yes
 PermitEmptyPasswords no
-
-# Tunneling and Port Forwarding - ENABLED
 AllowTcpForwarding yes
-AllowStreamLocalForwarding yes
 GatewayPorts no
-PermitTunnel yes
 X11Forwarding no
-
-# Session
-PrintMotd no
+PermitTunnel yes
+AllowStreamLocalForwarding yes
 TCPKeepAlive yes
-Compression yes
 ClientAliveInterval 60
 ClientAliveCountMax 3
-
-# Subsystem
 Subsystem sftp /usr/lib/ssh/sftp-server
-SSHEOF
-
-echo "SSH tunneling configuration completed"
-INITSCRIPT
-    
-    chmod +x "./sshfarm_data/${CONTAINER_NAME}/custom-cont-init.d/install-badvpn.sh"
-    
-    # Create service script for badVPN
-    mkdir -p "./sshfarm_data/${CONTAINER_NAME}/custom-services.d"
-    cat > "./sshfarm_data/${CONTAINER_NAME}/custom-services.d/badvpn.sh" <<'SERVICESCRIPT'
-#!/usr/bin/with-contenv bash
-
-echo "Starting badVPN-udpgw service..."
-exec /usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --loglevel info
-SERVICESCRIPT
-    
-    chmod +x "./sshfarm_data/${CONTAINER_NAME}/custom-services.d/badvpn.sh"
+SSHCONFIG
     
     cat >> "$COMPOSE_FILE" <<EOF
 
@@ -170,16 +117,14 @@ SERVICESCRIPT
       - PASSWORD_ACCESS=true
       - USER_PASSWORD=${SSH_FARM_PASSWORD}
       - USER_NAME=${USERNAME}
-      - DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel
     volumes:
       - ./sshfarm_data/${CONTAINER_NAME}:/config
+      - ./sshfarm_data/${CONTAINER_NAME}/sshd_config:/etc/ssh/sshd_config:ro
     ports:
       - "${PORT}:2222"
     restart: unless-stopped
     networks:
       - sshfarm_network
-    cap_add:
-      - NET_ADMIN
 
 EOF
 done
@@ -243,7 +188,6 @@ echo -e "${GREEN}SSH Farm Information:${NC}"
 echo -e "-----------------------------------------------------"
 echo -e "  ${GREEN}Total Servers:${NC}   $NUM_SERVERS"
 echo -e "  ${GREEN}Shared Password:${NC} $SSH_FARM_PASSWORD"
-echo -e "  ${GREEN}badVPN-udpgw:${NC}    Enabled on 127.0.0.1:7300 (all servers)"
 echo -e ""
 echo -e "${CYAN}Connection Details:${NC}"
 
@@ -255,8 +199,7 @@ for i in "${!PORTS[@]}"; do
     echo -e "    User:       ${GREEN}$USERNAME${NC}"
     echo -e "    Port:       ${GREEN}$PORT${NC}"
     echo -e "    Connect:    ${YELLOW}ssh -p $PORT $USERNAME@$VPS_PUBLIC_IP${NC}"
-    echo -e "    Tunnel:     ${YELLOW}ssh -p $PORT -D 1080 $USERNAME@$VPS_PUBLIC_IP${NC}"
-    echo -e "    UDPGW:      ${GREEN}127.0.0.1:7300${NC}"
+    echo -e "    Tunnel:     ${YELLOW}ssh -p $PORT -D 1080 -N $USERNAME@$VPS_PUBLIC_IP${NC}"
     echo ""
 done
 
