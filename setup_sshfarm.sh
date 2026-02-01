@@ -47,9 +47,14 @@ if [[ -z "$SSH_FARM_PORTS" ]]; then
     exit 1
 fi
 
-if [[ -z "$SSH_FARM_PASSWORD" ]]; then
-    print_error "SSH_FARM_PASSWORD is not set in workstation.env"
-    exit 1
+# Generate password if not set or is placeholder
+if [[ -z "$SSH_FARM_PASSWORD" ]] || [[ "$SSH_FARM_PASSWORD" == "<auto_generated_password>" ]]; then
+    print_message "Generating random password for SSH farm..."
+    SSH_FARM_PASSWORD=$(openssl rand -base64 24 | tr -d "/=+" | cut -c1-20)
+    
+    # Update workstation.env with generated password
+    sed -i "s|SSH_FARM_PASSWORD=\".*\"|SSH_FARM_PASSWORD=\"$SSH_FARM_PASSWORD\"|g" "$ENV_FILE"
+    print_message "✓ Password generated and saved to workstation.env"
 fi
 
 # Parse ports (remove trailing comma if exists)
@@ -187,6 +192,17 @@ for i in "${!PORTS[@]}"; do
     echo ""
 done
 
+echo -e "-----------------------------------------------------"
+echo -e "${YELLOW}SSH URLs (for easy import):${NC}"
+echo -e ""
+for i in "${!PORTS[@]}"; do
+    PORT="${PORTS[$i]}"
+    USER_NUM=$((i + 1))
+    USERNAME="sshfarm_user${USER_NUM}"
+    REMARK="SSHFarm${USER_NUM}_Port${PORT}"
+    echo -e "${CYAN}ssh://${USERNAME}:${SSH_FARM_PASSWORD}@${VPS_PUBLIC_IP}:${PORT}#${REMARK}${NC}"
+done
+echo -e ""
 echo -e "-----------------------------------------------------"
 echo -e "${YELLOW}Management Commands:${NC}"
 echo -e "  Start:   ${CYAN}docker compose -f $COMPOSE_FILE up -d${NC}"
