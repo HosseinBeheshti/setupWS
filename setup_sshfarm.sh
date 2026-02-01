@@ -184,7 +184,7 @@ sleep 15
 # Monitor container status
 print_message "Monitoring container startup..."
 for attempt in {1..12}; do
-    RUNNING_COUNT=$(docker compose -f "$COMPOSE_FILE" ps --format json 2>/dev/null | jq -r '.State' 2>/dev/null | grep -c "running" || echo "0")
+    RUNNING_COUNT=$(docker compose -f "$COMPOSE_FILE" ps | grep -c "Up" || echo "0")
     TOTAL_CONTAINERS=$NUM_SERVERS
     
     if [[ "$RUNNING_COUNT" -eq "$TOTAL_CONTAINERS" ]]; then
