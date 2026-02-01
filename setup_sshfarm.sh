@@ -109,43 +109,28 @@ fi
 
 # Configure SSH for tunneling
 echo "Configuring SSH server for port forwarding and tunneling..."
-SSHD_CONFIG="/config/ssh_host_keys/sshd_config"
 
-# Create custom sshd_config if it doesn't exist
-if [ ! -f "$SSHD_CONFIG" ]; then
-    cat > "$SSHD_CONFIG" <<'SSHEOF'
+# Write sshd_config to proper location
+cat > /config/sshd_config <<'SSHEOF'
 # SSH Server Configuration for Tunneling Support
-
-# Port and Protocol
 Port 2222
 Protocol 2
-
-# Host Keys
-HostKey /config/ssh_host_keys/ssh_host_rsa_key
-HostKey /config/ssh_host_keys/ssh_host_ecdsa_key
-HostKey /config/ssh_host_keys/ssh_host_ed25519_key
-
-# Logging
-SyslogFacility AUTH
-LogLevel INFO
 
 # Authentication
 PermitRootLogin no
 PubkeyAuthentication yes
 PasswordAuthentication yes
 PermitEmptyPasswords no
-ChallengeResponseAuthentication no
 
-# Tunneling and Port Forwarding - ENABLED FOR VPN USE
+# Tunneling and Port Forwarding - ENABLED
 AllowTcpForwarding yes
-X11Forwarding no
 AllowStreamLocalForwarding yes
 GatewayPorts no
 PermitTunnel yes
+X11Forwarding no
 
 # Session
 PrintMotd no
-PrintLastLog yes
 TCPKeepAlive yes
 Compression yes
 ClientAliveInterval 60
@@ -153,21 +138,9 @@ ClientAliveCountMax 3
 
 # Subsystem
 Subsystem sftp /usr/lib/ssh/sftp-server
-
-# Security
-MaxAuthTries 6
-MaxSessions 10
-StrictModes yes
 SSHEOF
-    echo "Custom sshd_config created with tunneling enabled"
-else
-    # Update existing config to enable tunneling
-    sed -i 's/^AllowTcpForwarding.*/AllowTcpForwarding yes/' "$SSHD_CONFIG" 2>/dev/null || echo "AllowTcpForwarding yes" >> "$SSHD_CONFIG"
-    sed -i 's/^GatewayPorts.*/GatewayPorts no/' "$SSHD_CONFIG" 2>/dev/null || echo "GatewayPorts no" >> "$SSHD_CONFIG"
-    sed -i 's/^PermitTunnel.*/PermitTunnel yes/' "$SSHD_CONFIG" 2>/dev/null || echo "PermitTunnel yes" >> "$SSHD_CONFIG"
-    sed -i 's/^AllowStreamLocalForwarding.*/AllowStreamLocalForwarding yes/' "$SSHD_CONFIG" 2>/dev/null || echo "AllowStreamLocalForwarding yes" >> "$SSHD_CONFIG"
-    echo "sshd_config updated with tunneling support"
-fi
+
+echo "SSH tunneling configuration completed"
 INITSCRIPT
     
     chmod +x "./sshfarm_data/${CONTAINER_NAME}/custom-cont-init.d/install-badvpn.sh"
@@ -197,6 +170,7 @@ SERVICESCRIPT
       - PASSWORD_ACCESS=true
       - USER_PASSWORD=${SSH_FARM_PASSWORD}
       - USER_NAME=${USERNAME}
+      - DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel
     volumes:
       - ./sshfarm_data/${CONTAINER_NAME}:/config
     ports:
