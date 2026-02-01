@@ -46,7 +46,7 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_ocserv.sh" "setup_xray.sh" "setup_fw.sh")
+REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_ocserv.sh" "setup_xray.sh" "setup_sshfarm.sh" "setup_fw.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
@@ -260,6 +260,16 @@ fi
 print_message "✓ Xray VPN Server configured"
 echo ""
 
+# 5.6: Setup SSH Farm with badVPN-udpgw
+print_message "--- Running setup_sshfarm.sh ---"
+./setup_sshfarm.sh
+if [[ $? -ne 0 ]]; then
+    print_error "SSH Farm setup failed!"
+    exit 1
+fi
+print_message "✓ SSH Farm configured"
+echo ""
+
 # ============================================================
 # Step 6: Configure Final Firewall Rules
 # ============================================================
@@ -290,6 +300,7 @@ echo -e "  ✓ L2TP/IPsec VPN (for VPN_APPS in VNC sessions)"
 echo -e "  ✓ Cloudflare Zero Trust Access (SSH/VNC)"
 echo -e "  ✓ OpenConnect VPN Server (ocserv)"
 echo -e "  ✓ Xray Reality VPN (VLESS + Reality protocol)"
+echo -e "  ✓ SSH Farm with badVPN-udpgw support"
 echo -e "  ✓ Virtual Router for VPN traffic"
 echo ""
 
@@ -332,7 +343,11 @@ echo -e "   Check status: ${CYAN}sudo systemctl status xray${NC}"
 echo -e "   View logs: ${CYAN}sudo journalctl -u xray -f${NC}"
 echo -e "   Connection info is shown after setup completes"
 echo -e ""
-echo -e "4. ${BLUE}Monitor services:${NC}"
+echo -e "4. ${BLUE}SSH Farm Servers:${NC}"
+echo -e "   Manage: ${CYAN}docker compose -f docker-compose-sshfarm.yml [up|down|restart|logs]${NC}"
+echo -e "   Status: ${CYAN}docker compose -f docker-compose-sshfarm.yml ps${NC}"
+echo -e ""
+echo -e "5. ${BLUE}Monitor services:${NC}"
 echo -e "   - VNC: ${CYAN}systemctl status vncserver-<username>@<display>${NC}"
 echo -e "   - Cloudflare: ${CYAN}systemctl status cloudflared${NC}"
 echo -e "   - Xray: ${CYAN}systemctl status xray${NC}"

@@ -1,0 +1,5 @@
+version: '3.8'
+
+services:
+  # SSH Farm containers will be dynamically added by setup_sshfarm.sh
+  # This file will be generated based on SSH_FARM_PORTS from workstation.env

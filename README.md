@@ -1,6 +1,6 @@
 # Secure Remote Access Gateway with Cloudflare Zero Trust
 
-**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access, OpenConnect VPN for secure internet access, Xray Reality VPN for bypassing DPI filtering, and L2TP for app-specific routing in VNC sessions.**
+**Secure access solution combining Cloudflare Zero Trust for SSH/VNC access, OpenConnect VPN for secure internet access, Xray Reality VPN for bypassing DPI filtering, SSH Farm with badVPN-udpgw, and L2TP for app-specific routing in VNC sessions.**
 
 ---
 
@@ -11,58 +11,90 @@ This setup provides comprehensive secure remote access:
 - **Cloudflare Zero Trust**: Identity-aware SSH/VNC access management
 - **OpenConnect VPN (ocserv)**: AnyConnect-compatible VPN server for secure internet access
 - **Xray Reality VPN**: VLESS + Reality protocol for bypassing DPI filtering (ideal for Iran)
+- **SSH Farm**: Multiple SSH servers with badVPN-udpgw (UDP-over-TCP tunneling)
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                    CLIENT DEVICES                          │
-│                  ┌──────────────────────────────┐          │
-│                  │  Cloudflare One Agent        │          │
-│                  │  (SSH/VNC Access + WARP)     │          │
-│                  └───────────┬──────────────────┘          │
-└──────────────────────────────┼─────────────────────────────┘
-                               │
-                               │ via Cloudflare Edge Network
-                               │ (Zero Trust Access + WARP)
-                               │
-              ┌────────────────▼────────────┐
-              │   Cloudflare Edge Network   │
-              │      (Global CDN)           │
-              └────────────┬────────────────┘
-                           │ Secure Tunnel
-                           ▼
-┌──────────────────────────┴──────────────────────────────────┐
-│                         VPS SERVER                          │
-│            ┌──────────────────────┐                         │
-│            │  cloudflared         │                         │
-│            │  Tunnel Service      │                         │
-│            │  (SSH/VNC + WARP)    │                         │
-│            └──────────┬───────────┘                         │
-│                       │                                     │
-│                       ▼                                     │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │            VNC SESSIONS (Desktop Access)              │  │
-│  │            - Accessed via Cloudflare Access           │  │
-│  │            - Users: alice, bob, etc.                  │  │
-│  │            - Ports: 5910, 5911, 5912...               │  │
-│  │                                                       │  │
-│  │   ┌───────────────────────────────────────────────┐   │  │
-│  │   │  L2TP Client (run ./run_vpn.sh in VNC)        │   │  │
-│  │   │  Routes specific VPN_APPS traffic:            │   │  │
-│  │   │  - xrdp, remmina, etc.                        │   │  │
-│  │   └───────────────────────────────────────────────┘   │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│          ┌─────────┐  ┌──────────┐  ┌──────────┐            │
-│          │ Docker  │  │ VS Code  │  │ Desktop  │            │
-│          │         │  │  Chrome  │  │   Apps   │            │
-│          └─────────┘  └──────────┘  └──────────┘            │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT DEVICES                                    │
+│                                                                             │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐               │
+│  │ Cloudflare One │  │  VPN Clients   │  │  SSH Clients   │               │
+│  │     Agent      │  │ (AnyConnect/   │  │   (Direct)     │               │
+│  │ (SSH/VNC/WARP) │  │  v2rayNG)      │  │                │               │
+│  └────────┬───────┘  └────────┬───────┘  └────────┬───────┘               │
+└───────────┼──────────────────┼──────────────────┼─────────────────────────┘
+            │                   │                   │
+            │ Cloudflare Edge   │ Direct VPN        │ Direct SSH
+            │                   │                   │
+    ┌───────▼───────┐          │                   │
+    │  Cloudflare   │          │                   │
+    │  Edge Network │          │                   │
+    │  (Global CDN) │          │                   │
+    └───────┬───────┘          │                   │
+            │ Secure Tunnel    │                   │
+            │                  │                   │
+┌───────────▼──────────────────▼───────────────────▼─────────────────────────┐
+│                            VPS SERVER                                       │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                        ACCESS POINTS                                 │  │
+│  │                                                                      │  │
+│  │  ┌───────────────┐  ┌──────────────┐  ┌─────────────────────────┐  │  │
+│  │  │ cloudflared   │  │ OpenConnect  │  │  Xray Reality VPN       │  │  │
+│  │  │ SSH/VNC Tunnel│  │ VPN (ocserv) │  │  (VLESS + Reality)      │  │  │
+│  │  │               │  │ Port: 443    │  │  Port: 2053             │  │  │
+│  │  └───────┬───────┘  └──────┬───────┘  └──────────┬──────────────┘  │  │
+│  └──────────┼──────────────────┼─────────────────────┼─────────────────┘  │
+│             │                  │                     │                     │
+│             ▼                  ▼                     ▼                     │
+│  ┌──────────────────┐  ┌──────────────┐  ┌─────────────────────────────┐  │
+│  │  VNC Sessions    │  │  IP Routing  │  │  L2TP/IPsec VPN Server      │  │
+│  │  :5910,:5911,... │  │  & NAT       │  │  Ports: 500,1701,4500 (UDP) │  │
+│  └──────────────────┘  └──────────────┘  └─────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                      SSH FARM (Docker Containers)                    │  │
+│  │                      with badVPN-udpgw (UDP-over-TCP)                │  │
+│  │                                                                      │  │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐   │  │
+│  │  │ SSH Server  │ │ SSH Server  │ │ SSH Server  │ │    ...      │   │  │
+│  │  │ user1       │ │ user2       │ │ user3       │ │             │   │  │
+│  │  │ Port: 8080  │ │ Port: 8880  │ │ Port: 2052  │ │ 2082,2086   │   │  │
+│  │  │ UDPGW: 7300 │ │ UDPGW: 7300 │ │ UDPGW: 7300 │ │ 2095,9443...│   │  │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘   │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │           VNC Desktop Environment (per user)                         │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌─────────┐ ┌──────────┐                │  │
+│  │  │ VS Code  │ │  Chrome  │ │ Docker  │ │ Desktop  │                │  │
+│  │  │          │ │  Firefox │ │         │ │   Apps   │                │  │
+│  │  └──────────┘ └──────────┘ └─────────┘ └──────────┘                │  │
+│  │                                                                      │  │
+│  │  L2TP Client: Routes VPN_APPS (xrdp, remmina) via run_vpn.sh        │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-TRAFFIC FLOWS:
-1. SSH/VNC Access: Client → Cloudflare Edge → cloudflared → SSH/VNC on VPS
-2. WARP Endpoint:  Client WARP → VPS:7844 → Cloudflare (bypasses filtering)
-3. L2TP in VNC:    VNC Session Apps → L2TP Server (routes specific VPN_APPS)
+ACCESS METHODS & PORTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. SSH/VNC Access (via Cloudflare):
+   → Client → Cloudflare Edge → cloudflared → localhost:22 (SSH) / :5910+ (VNC)
+   
+2. OpenConnect VPN (AnyConnect):
+   → Port 443 (TCP/UDP) → Full traffic routing through VPS
+   
+3. Xray Reality VPN (Anti-DPI):
+   → Port 2053 (TCP) → VLESS + Reality → Bypasses DPI filtering
+   
+4. L2TP/IPsec VPN Server:
+   → Ports 500 (UDP), 1701 (UDP), 4500 (UDP) → App-specific routing in VNC
+   
+5. SSH Farm (Direct Access):
+   → Ports 8080, 8880, 2052, 2082, 2086, 2095, 9443, 2083, 2087, 2096...
+   → Each container: badVPN-udpgw on 127.0.0.1:7300 (UDP-over-TCP tunneling)
+   → Users: sshfarm_user1, sshfarm_user2, sshfarm_user3...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ### What You Get
@@ -70,6 +102,7 @@ TRAFFIC FLOWS:
 - ✅ **Cloudflare Zero Trust** - Identity-aware SSH/VNC access (Gmail + OTP)
 - ✅ **OpenConnect VPN Server** - AnyConnect-compatible VPN (port 443, looks like HTTPS)
 - ✅ **Xray Reality VPN** - VLESS + Reality for bypassing DPI filtering (Docker-based)
+- ✅ **SSH Farm** - Multiple SSH servers with badVPN-udpgw (UDP-over-TCP tunneling)
 - ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions
 - ✅ **Multiple VNC Users** - Individual desktop sessions per user
 - ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
@@ -263,6 +296,8 @@ If you want to access VNC through Cloudflare (recommended):
    - `VPS_PUBLIC_IP`: Your VPS public IP address
    - `VNCUSER*_PASSWORD`: Set strong passwords for VNC users
    - `L2TP_*`: L2TP VPN credentials if using VPN_APPS routing
+   - `SSH_FARM_PORTS`: Comma-separated list of ports for SSH servers
+   - `SSH_FARM_PASSWORD`: Shared password for all SSH farm users
    - `FIREWALL_ALLOWED_PORTS`: Ports to allow through firewall
      - Default: `500/udp,1701/udp,4500/udp,443` (L2TP + OpenConnect)
      - Leave empty for Cloudflare tunnel-only access (most secure)
@@ -286,7 +321,9 @@ sudo ./setup_ws.sh
 4. Creates VNC servers for each user
 5. Installs cloudflared and configures Cloudflare tunnel for secure access
 6. Installs and configures OpenConnect VPN server (ocserv)
-7. Configures secure firewall with custom port rules from workstation.env
+7. Sets up Xray Reality VPN (VLESS + Reality protocol)
+8. Deploys SSH Farm with badVPN-udpgw (multiple SSH servers)
+9. Configures secure firewall with custom port rules from workstation.env
 
 **Duration**: 10-15 minutes depending on VPS speed.
 
@@ -361,71 +398,6 @@ L2TP is only for routing specific apps in VNC sessions.
 
 ---
 
-### 3.4 Connect to OpenConnect VPN
-
-OpenConnect VPN provides secure internet access through your VPS. It uses the AnyConnect-compatible protocol on port 443, making it look like standard HTTPS traffic.
-
-#### Managing VPN Users
-
-**Add a new VPN user:**
-```bash
-sudo ./manage_ocserv.sh add username
-```
-You'll be prompted to enter a password for the user.
-
-**Remove a user:**
-```bash
-sudo ./manage_ocserv.sh remove username
-```
-
-**List all users:**
-```bash
-sudo ./manage_ocserv.sh list
-```
-
-**Disable/Enable a user:**
-```bash
-sudo ./manage_ocserv.sh disable username
-sudo ./manage_ocserv.sh enable username
-```
-
-**Change user password:**
-```bash
-sudo ./manage_ocserv.sh passwd username
-```
-
-#### Client Connection
-
-**On Windows/Mac:**
-- Download and install [Cisco AnyConnect Client](https://www.cisco.com/c/en/us/support/security/anyconnect-secure-mobility-client/tsd-products-support-series-home.html)
-- Or use [OpenConnect GUI](https://openconnect.github.io/openconnect-gui/)
-- Server: `vpn.yourdomain.com:443`
-- Username: Your VPN username
-- Password: Your VPN password
-
-**On Linux:**
-```bash
-# Install OpenConnect client
-sudo apt-get install openconnect
-
-# Connect to VPN
-sudo openconnect vpn.yourdomain.com:443
-```
-
-**On Android/iOS:**
-- Install Cisco AnyConnect from Play Store or App Store
-- Add new connection: `vpn.yourdomain.com:443`
-- Enter credentials when prompted
-
-#### VPN Features
-
-- ✅ **Port 443 (TCP & UDP)**: Looks like HTTPS, bypasses most firewalls
-- ✅ **One Connection Per User**: max-same-clients = 1
-- ✅ **Capacity Control**: Supports up to 16 concurrent users (configurable)
-- ✅ **Full Traffic Routing**: All client traffic routes through VPS
-- ✅ **DNS Privacy**: Uses Google DNS (8.8.8.8) or Cloudflare DNS (1.1.1.1)
-- ✅ **Auto-start**: Service starts automatically on boot
-
 ---
 
 ## Firewall Configuration
@@ -446,6 +418,9 @@ Edit `FIREWALL_ALLOWED_PORTS` in `workstation.env`:
 # Examples:
 # Default (L2TP + OpenConnect):
 FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp,443"
+
+# With SSH Farm ports (automatically added by setup_sshfarm.sh):
+FIREWALL_ALLOWED_PORTS="500/udp,1701/udp,4500/udp,443,8080/tcp,8880/tcp,2052/tcp"
 
 # OpenConnect only:
 FIREWALL_ALLOWED_PORTS="443"
@@ -472,70 +447,51 @@ sudo ./setup_fw.sh
 - Modify `FIREWALL_ALLOWED_PORTS` only if you need additional services
 
 ---
-Xray Reality VPN (VLESS + Reality)
 
-Xray with Reality protocol is designed to bypass Deep Packet Inspection (DPI) filtering by mimicking legitimate HTTPS traffic to trusted websites. This makes it highly resilient against filtering systems used in Iran and other countries.
+## SSH Farm with badVPN-udpgw
 
-### Why Use Xray Reality?
+Multiple SSH servers for load distribution with UDP-over-TCP tunneling support.
 
-- **No recognizable fingerprints**: Eliminates patterns that DPI uses to detect VPNs
-- **Mimics legitimate traffic**: Initial handshake identical to connection to Microsoft/Cloudflare
-- **No SSL certificates needed**: Uses SNI spoofing instead of TLS certificates
-- **XTLS-Vision flow**: Removes detectable characteristics of other protocols
+### Features
 
-### Quick Start
+- **Multiple SSH servers**: One container per configured port
+- **badVPN-udpgw**: UDP-over-TCP tunneling on port 7300 (internal)
+- **Shared password**: Same password for all farm users
+- **Unique usernames**: sshfarm_user1, sshfarm_user2, etc.
 
-The Xray setup is included in the main setup script:
+### Configuration
 
-```bash
-sudo ./setup_ws.sh
-```
-
-Or install separately:
+Edit `workstation.env`:
 
 ```bash
-sudo ./setup_xray.sh
+SSH_FARM_PORTS="8080,8880,2052,2082,2086,2095,9443"
+SSH_FARM_PASSWORD="your_strong_password"
 ```
 
-### User Management
+### Management
 
 ```bash
-# Add new user
-sudo ./manage_xray.sh add user@email.com
+# Start all SSH servers
+docker compose -f docker-compose-sshfarm.yml up -d
 
-# Remove user
-sudo ./manage_xray.sh remove user@email.com
+# Stop all servers
+docker compose -f docker-compose-sshfarm.yml down
 
-# List all users
-sudo ./manage_xray.sh list
+# View logs
+docker compose -f docker-compose-sshfarm.yml logs -f
 
-# Show QR code for easy mobile setup
-sudo ./manage_xray.sh qr user@email.com
-
-# Check server status
-sudo ./manage_xray.sh status
+# Check status
+docker compose -f docker-compose-sshfarm.yml ps
 ```
 
-### Client Setup (Android - v2rayNG)
+### Connect
 
-1. Install v2rayNG from Google Play or GitHub
-2. Scan QR code from `manage_xray.sh qr` command
-3. Or manually configure:
-   - Address: YOUR_SERVER_IP
-   - Port: 443
-   - UUID: <from setup>
-   - Flow: xtls-rprx-vision
-   - Security: reality
-   - SNI: www.microsoft.com
-   - Fingerprint: chrome
-   - Public Key: <from setup>
-   - ShortId: <from setup>
+```bash
+# Connect to any server (e.g., user1 on port 8080)
+ssh sshfarm_user1@your-server-ip -p 8080
 
-### Detailed Documentation
-
-For complete guide, see:
-- **[XRAY_REALITY_GUIDE.md](XRAY_REALITY_GUIDE.md)** - Full setup and configuration guide
-- **[XRAY_QUICK_REF.md](XRAY_QUICK_REF.md)** - Quick reference card
+# badVPN-udpgw is available at 127.0.0.1:7300 inside each container
+```
 
 ---
 
