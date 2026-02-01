@@ -46,7 +46,7 @@ source "$ENV_FILE"
 print_message "Configuration loaded successfully."
 
 # --- Check if all required scripts exist ---
-REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_ocserv.sh" "setup_xray.sh" "setup_sshfarm.sh" "setup_fw.sh")
+REQUIRED_SCRIPTS=("setup_virtual_router.sh" "setup_l2tp.sh" "setup_vnc.sh" "setup_ztna.sh" "setup_xray.sh" "setup_sshfarm.sh" "setup_fw.sh")
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [[ ! -f "./$script" ]]; then
         print_error "Required script not found: $script"
