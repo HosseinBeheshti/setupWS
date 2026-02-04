@@ -14,66 +14,67 @@ This setup provides comprehensive secure remote access:
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           CLIENT DEVICES                                    │
-│                                                                             │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐               │
-│  │ Cloudflare One │  │  VPN Clients   │  │  SSH Clients   │               │
-│  │     Agent      │  │ (AnyConnect/   │  │   (Direct)     │               │
-│  │ (SSH/VNC/WARP) │  │  v2rayNG)      │  │                │               │
-│  └────────┬───────┘  └────────┬───────┘  └────────┬───────┘               │
-└───────────┼──────────────────┼──────────────────┼─────────────────────────┘
-            │                   │                   │
-            │ Cloudflare Edge   │ Direct VPN        │ Direct SSH
-            │                   │                   │
-    ┌───────▼───────┐          │                   │
-    │  Cloudflare   │          │                   │
-    │  Edge Network │          │                   │
-    │  (Global CDN) │          │                   │
-    └───────┬───────┘          │                   │
-            │ Secure Tunnel    │                   │
-            │                  │                   │
-┌───────────▼──────────────────▼───────────────────▼─────────────────────────┐
-│                            VPS SERVER                                       │
-│                                                                             │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                        ACCESS POINTS                                 │  │
-│  │                                                                      │  │
-│  │  ┌───────────────┐  ┌─────────────────────────┐                    │  │
-│  │  │ cloudflared   │  │  Xray Reality VPN       │                    │  │
-│  │  │ SSH/VNC Tunnel│  │  (VLESS + Reality)      │                    │  │
-│  │  │               │  │  Port: 2053             │                    │  │
-│  │  └───────┬───────┘  └──────────┬──────────────┘                    │  │
-│  └──────────┼─────────────────────┼───────────────────────────────────┘  │
-│             │                     │                                       │
-│             ▼                     ▼                                       │
-│  ┌──────────────────┐  ┌─────────────────────────────┐                  │
-│  │  VNC Sessions    │  │  L2TP/IPsec VPN Server      │                  │
-│  │  :5910,:5911,... │  │  Ports: 500,1701,4500 (UDP) │                  │
-│  └──────────────────┘  └─────────────────────────────┘                  │
-│                                                                             │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                      SSH FARM (Docker Containers)                    │  │
-│  │                      SSH Tunneling Enabled (for VPN apps)            │  │
-│  │                                                                      │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐   │  │
-│  │  │ SSH Server  │ │ SSH Server  │ │ SSH Server  │ │    ...      │   │  │
-│  │  │ user1       │ │ user2       │ │ user3       │ │             │   │  │
-│  │  │ Port: 8080  │ │ Port: 8880  │ │ Port: 2052  │ │ 2082,2086   │   │  │
-│  │  │ Tunneling✓  │ │ Tunneling✓  │ │ Tunneling✓  │ │ 2095,9443...│   │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘   │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │           VNC Desktop Environment (per user)                         │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌─────────┐ ┌──────────┐                │  │
-│  │  │ VS Code  │ │  Chrome  │ │ Docker  │ │ Desktop  │                │  │
-│  │  │          │ │  Firefox │ │         │ │   Apps   │                │  │
-│  │  └──────────┘ └──────────┘ └─────────┘ └──────────┘                │  │
-│  │                                                                      │  │
-│  │  L2TP Client: Routes VPN_APPS (xrdp, remmina) via run_vpn.sh        │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                       CLIENT DEVICES                           │
+│                                                                │
+│  ┌────────────────┐                        ┌────────────────┐  │
+│  │ Cloudflare One │                        │  SSH Clients   │  │
+│  │     Agent      │                        │   (Direct)     │  │
+│  │ (SSH/VNC/WARP) │                        │                │  │
+│  └────────┬───────┘                        └────────┬───────┘  │
+└───────────┼─────────────────────────────────────────┼──────────┘
+            │                                         │
+            │ Cloudflare Edge                         │ Direct SSH
+            │                                         │
+    ┌───────▼───────┐                                 │
+    │  Cloudflare   │                                 │
+    │  Edge Network │                                 │
+    │  (Global CDN) │                                 │
+    └───────┬───────┘                                 │
+            │ Secure Tunnel                           │
+            │                                         │
+┌───────────▼─────────────────────────────────────────▼──────────┐
+│                            VPS SERVER                          │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                        ACCESS POINTS                     │  │
+│  │                                                          │  │
+│  │  ┌───────────────┐       ┌─────────────────────────┐     │  │
+│  │  │ cloudflared   │       │  Xray Reality VPN       │     │  │
+│  │  │ SSH/VNC Tunnel│       │  (VLESS + Reality)      │     │  │
+│  │  │               │       │  Port: 2053             │     │  │
+│  │  └───────┬───────┘       └────────────────────┬────┘     │  │
+│  └──────────┼────────────────────────────────────┼──────────┘  │
+│             │─────────────────────|              │             │
+│             ▼                     ▼              |             │
+│  ┌──────────────────┐  ┌─────────────────┐       |             │
+│  │  VNC Sessions    │  │  L2TP/IPsec     │       |             │
+│  │   :5910,         │  │  VPN Server     │       |             │
+│  │   :5911,...      │  │  500,1701,4500  │       |             │
+│  └─┬────────────────┘  └─────────────────┘       |             │
+│    |                                             |             │
+│    |      ┌──────────────────────────────────────▼──────────┐  │
+│    |      │         SSH FARM (Docker Containers)            │  │
+│    |      │      SSH Tunneling Enabled (for VPN apps)       │  │
+│    |      │                                                 │  │
+│    |      │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐│  │
+│    |      │  │ SSH Server  │ │ SSH Server  │ │    ...      ││  │
+│    |      │  │ user1       │ │ user2       │ │             ││  │
+│    |      │  │ Port: 8080  │ │ Port: 8880  │ │ 2082,2086   ││  │
+│    |      │  │ Tunneling✓  │ │ Tunneling✓  │ │ 2095,9443...││  │
+│    |      │  └─────────────┘ └─────────────┘ └─────────────┘│  │
+│    |      └─────────────────────────────────────────────────┘  │
+│    |                                                           │
+│  ┌─▼────────────────────────────────────────────────────────┐  │
+│  │           VNC Desktop Environment (per user)             │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌─────────┐ ┌──────────┐      │  │
+│  │  │ VS Code  │ │  Chrome  │ │ Docker  │ │ Desktop  │      │  │
+│  │  │          │ │  Firefox │ │         │ │   Apps   │      │  │
+│  │  └──────────┘ └──────────┘ └─────────┘ └──────────┘      │  │
+│  │                                                          │  │
+│  │  L2TP Client: Routes VPN_APPS via run_vpn.sh             │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
 
 ACCESS METHODS & PORTS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -93,15 +94,6 @@ ACCESS METHODS & PORTS:
    → Users: sshfarm_user1, sshfarm_user2, sshfarm_user3...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
-
-### What You Get
-
-- ✅ **Cloudflare Zero Trust** - Identity-aware SSH/VNC access (Gmail + OTP)
-- ✅ **Xray Reality VPN** - VLESS + Reality for bypassing DPI filtering (Docker-based)
-- ✅ **SSH Farm** - Multiple SSH servers with tunneling support (works with NekoBox, OpenVPN)
-- ✅ **L2TP/IPsec VPN** - Application-specific routing in VNC sessions
-- ✅ **Multiple VNC Users** - Individual desktop sessions per user
-- ✅ **Docker & Dev Tools** - VS Code, Chrome, Firefox pre-installed
 
 ---
 
@@ -180,10 +172,10 @@ Configure SSH access through Cloudflare Access:
 2. Click **Add an application**
 3. Select **Self-hosted**
 4. Configure the application:
-   - **Application name**: `VPS SSH`
+   - **Application name**: `ssh`
    - **Session Duration**: `24 hours` (or your preference)
    - **Public hostname**:
-     - Subdomain: `ssh-vps`
+     - Subdomain: `ssh`
      - Domain: Select your team domain from dropdown
      - Path: Leave empty
    - Click **Next**
@@ -201,40 +193,7 @@ Configure SSH access through Cloudflare Access:
 
 ---
 
-### 1.5 Configure Tunnel Routes for Applications
-
-Now connect your tunnel to the applications you created:
-
-1. Go to: **Networks → Connectors**
-2. Click on your tunnel name (`vps-tunnel`)
-3. Click **Configure**
-4. Go to **Published application routes** tab
-5. Click **Add a published application route**
-
-**For SSH Application:**
-   - **Subdomain**: `ssh-vps` (must match the subdomain from step 1.4)
-   - **Domain**: Select your team domain
-   - **Path**: Leave empty
-   - **Type**: `SSH`
-   - **URL**: `localhost:22`
-   - Click **Save hostname**
-
-**For VNC Applications (repeat for each VNC user):**
-6. Click **Add a public hostname** again
-   - **Subdomain**: `vnc1-vps` (for first VNC user)
-   - **Domain**: Select your team domain
-   - **Path**: Leave empty
-   - **Type**: `TCP`
-   - **URL**: `localhost:5910` (port 5910 for first user, 5911 for second, etc.)
-   - Click **Save hostname**
-
-7. Repeat step 6 for additional VNC users with different subdomains (vnc2-vps, vnc3-vps) and ports (5911, 5912)
-
-**Result**: Your tunnel now routes traffic from Cloudflare to your VPS services
-
----
-
-### 1.6 Create Access Application for VNC
+### 1.5 Create Access Application for VNC
 
 If you want to access VNC through Cloudflare (recommended):
 
@@ -247,7 +206,7 @@ If you want to access VNC through Cloudflare (recommended):
    - **Application name**: `VPS VNC User 1` (or specific username)
    - **Session Duration**: `24 hours`
    - **Application domain**:
-     - Subdomain: `vnc1-vps` (use vnc2-vps, vnc3-vps for additional users)
+     - Subdomain: `vnc1` (use vnc2, vnc3 for additional users)
      - Domain: Select your team domain
    - Click **Next**
 
@@ -264,6 +223,39 @@ If you want to access VNC through Cloudflare (recommended):
 7. **Repeat steps 1-6** for each VNC user (User 2 on port 5911, User 3 on port 5912, etc.)
 
 **Result**: Each VNC session has its own protected access application
+
+---
+
+### 1.6 Configure Tunnel Routes for Applications
+
+Now connect your tunnel to the applications you created:
+
+1. Go to: **Networks → Connectors**
+2. Click on your tunnel name (`vps-access`)
+3. Click **Configure**
+4. Go to **Published application routes** tab
+5. Click **Add a published application route**
+
+**For SSH Application:**
+   - **Subdomain**: `ssh` (must match the subdomain from step 1.4)
+   - **Domain**: Select your team domain
+   - **Path**: Leave empty
+   - **Type**: `SSH`
+   - **URL**: `localhost:22`
+   - Click **Save hostname**
+
+**For VNC Applications (repeat for each VNC user):**
+6. Click **Add a public hostname** again
+   - **Subdomain**: `vnc1` (for first VNC user)
+   - **Domain**: Select your team domain
+   - **Path**: Leave empty
+   - **Type**: `TCP`
+   - **URL**: `localhost:5910` (port 5910 for first user, 5911 for second, etc.)
+   - Click **Save hostname**
+
+7. Repeat step 6 for additional VNC users with different subdomains (vnc2, vnc3) and ports (5911, 5912)
+
+**Result**: Your tunnel now routes traffic from Cloudflare to your VPS services
 
 ---
 
@@ -304,7 +296,7 @@ If you want to access VNC through Cloudflare (recommended):
 **Run the master setup script** (installs everything in correct order):
 
 ```bash
-sudo ./setup_ws.sh
+./setup_ws.sh
 ```
 
 **What this does:**
@@ -343,7 +335,7 @@ sudo apt-get update && sudo apt-get install cloudflared
 ```bash
 # Install cloudflared on client machine
 # Create local tunnel to VNC
-cloudflared access tcp --hostname vnc1-vps.yourteam.cloudflareaccess.com --url localhost:5900
+cloudflared access tcp --hostname vnc1.yourdomain.org --url localhost:5900
 
 # In another terminal, connect VNC client to localhost:5900
 ```
