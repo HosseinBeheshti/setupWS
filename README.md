@@ -20,7 +20,7 @@ flowchart TB
         SSHC["SSH Clients<br/>Direct"]
     end
 
-    subgraph EDGE[" CLOUDFLARE EDGE NETWORK "]
+    subgraph EDGE[" "]
         CFE["Cloudflare<br/>Edge Network<br/>Global CDN"]
     end
 
@@ -38,7 +38,7 @@ flowchart TB
         SSH3["More servers<br/>2082, 2086, 2095<br/>9443..."]
     end
 
-    subgraph DESKTOP[" VNC DESKTOP ENVIRONMENT "]
+    subgraph DESKTOP[" VNC DESKTOP "]
         VSCODE["VS Code"]
         CHROME["Chrome/Firefox"]
         DOCKER["Docker"]
@@ -57,11 +57,11 @@ flowchart TB
     FARM --- SSH2
     FARM --- SSH3
 
-    style CLIENT fill:#e1f5ff,stroke:#01579b,stroke-width:3px
-    style EDGE fill:#fff4e6,stroke:#e65100,stroke-width:3px
-    style VPS fill:#f3e5f5,stroke:#4a148c,stroke-width:3px
-    style FARM fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    style DESKTOP fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    style CLIENT fill:#e1f5ff,stroke:#01579b,stroke-width:3px,color:#000
+    style EDGE fill:#fff4e6,stroke:#e65100,stroke-width:3px,color:#000
+    style VPS fill:#f3e5f5,stroke:#4a148c,stroke-width:3px,color:#000
+    style FARM fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    style DESKTOP fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
 ```
 
 
