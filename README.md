@@ -18,6 +18,7 @@ flowchart TB
     subgraph CLIENT[" CLIENT DEVICES "]
         CF["Cloudflare One Agent<br/>SSH/VNC/WARP"]
         SSHC["SSH Clients<br/>Direct"]
+        XRAYC["XRAY Clients"]
     end
 
     subgraph EDGE[" "]
@@ -28,40 +29,25 @@ flowchart TB
         direction TB
         CFD["cloudflared<br/>SSH/VNC Tunnel"]
         XRAY["Xray Reality VPN<br/>VLESS + Reality<br/>Port: 2053"]
-        VNC["VNC Sessions<br/>:5910, :5911, ..."]
-        L2TP["L2TP/IPsec VPN<br/>500, 1701, 4500"]
+        FARM[" SSH FARM - Docker Containers<br/>sshfarm_user1:Port1(8080)<br/>...<br/><br/>Tunneling "]
+        VNC_BOX[" VNC DESKTOP "]
     end
 
-    subgraph FARM[" SSH FARM - Docker Containers "]
-        SSH1["SSH user1<br/>Port: 8080<br/>Tunneling ✓"]
-        SSH2["SSH user2<br/>Port: 8880<br/>Tunneling ✓"]
-        SSH3["More servers<br/>2082, 2086, 2095<br/>9443..."]
-    end
-
-    subgraph DESKTOP[" VNC DESKTOP "]
-        VSCODE["VS Code"]
-        CHROME["Chrome/Firefox"]
-        DOCKER["Docker"]
-        APPS["Desktop Apps"]
-        ROUTE["L2TP Client<br/>Routes VPN_APPS"]
+    subgraph VNC_BOX[" VNC DESKTOP "]
+        direction LR
+        VSCODE["VS Code"] --- CHROME["Chrome/Firefox"] --- APPS["..."] --- L2TP["L2TP/IPsec VPN<br/>500, 1701, 4500"]
     end
 
     CF -->|Cloudflare Edge| CFE
-    SSHC -->|Direct SSH| VPS
+    SSHC -->|Direct SSH| FARM
+    XRAYC -->|VLESS+REALITY| XRAY
     CFE -->|Secure Tunnel| CFD
-    CFD --> VNC
-    CFD --> L2TP
-    XRAY --> FARM
-    VNC --> DESKTOP
-    FARM --- SSH1
-    FARM --- SSH2
-    FARM --- SSH3
+    CFD --> VNC_BOX
 
     style CLIENT fill:#e1f5ff,stroke:#01579b,stroke-width:3px,color:#000
     style EDGE fill:#fff4e6,stroke:#e65100,stroke-width:3px,color:#000
     style VPS fill:#f3e5f5,stroke:#4a148c,stroke-width:3px,color:#000
-    style FARM fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
-    style DESKTOP fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
+    style VNC_BOX fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
 ```
 
 
