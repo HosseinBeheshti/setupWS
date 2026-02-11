@@ -13,87 +13,73 @@ This setup provides comprehensive secure remote access:
 - **SSH Farm**: Multiple SSH servers with SSH tunneling support (for VPN apps like NekoBox)
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                       CLIENT DEVICES                           │
-│                                                                │
-│  ┌────────────────┐                        ┌────────────────┐  │
-│  │ Cloudflare One │                        │  SSH Clients   │  │
-│  │     Agent      │                        │   (Direct)     │  │
-│  │ (SSH/VNC/WARP) │                        │                │  │
-│  └────────┬───────┘                        └────────┬───────┘  │
-└───────────┼─────────────────────────────────────────┼──────────┘
-            │                                         │
-            │ Cloudflare Edge                         │ Direct SSH
-            │                                         │
-    ┌───────▼───────┐                                 │
-    │  Cloudflare   │                                 │
-    │  Edge Network │                                 │
-    │  (Global CDN) │                                 │
-    └───────┬───────┘                                 │
-            │ Secure Tunnel                           │
-            │                                         │
-┌───────────▼─────────────────────────────────────────▼──────────┐
-│                            VPS SERVER                          │
-│                                                                │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                        ACCESS POINTS                     │  │
-│  │                                                          │  │
-│  │  ┌───────────────┐       ┌─────────────────────────┐     │  │
-│  │  │ cloudflared   │       │  Xray Reality VPN       │     │  │
-│  │  │ SSH/VNC Tunnel│       │  (VLESS + Reality)      │     │  │
-│  │  │               │       │  Port: 2053             │     │  │
-│  │  └───────┬───────┘       └────────────────────┬────┘     │  │
-│  └──────────┼────────────────────────────────────┼──────────┘  │
-│             │─────────────────────|              │             │
-│             ▼                     ▼              |             │
-│  ┌──────────────────┐  ┌─────────────────┐       |             │
-│  │  VNC Sessions    │  │  L2TP/IPsec     │       |             │
-│  │   :5910,         │  │  VPN Server     │       |             │
-│  │   :5911,...      │  │  500,1701,4500  │       |             │
-│  └─┬────────────────┘  └─────────────────┘       |             │
-│    |                                             |             │
-│    |      ┌──────────────────────────────────────▼──────────┐  │
-│    |      │         SSH FARM (Docker Containers)            │  │
-│    |      │      SSH Tunneling Enabled (for VPN apps)       │  │
-│    |      │                                                 │  │
-│    |      │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐│  │
-│    |      │  │ SSH Server  │ │ SSH Server  │ │    ...      ││  │
-│    |      │  │ user1       │ │ user2       │ │             ││  │
-│    |      │  │ Port: 8080  │ │ Port: 8880  │ │ 2082,2086   ││  │
-│    |      │  │ Tunneling✓  │ │ Tunneling✓  │ │ 2095,9443...││  │
-│    |      │  └─────────────┘ └─────────────┘ └─────────────┘│  │
-│    |      └─────────────────────────────────────────────────┘  │
-│    |                                                           │
-│  ┌─▼────────────────────────────────────────────────────────┐  │
-│  │           VNC Desktop Environment (per user)             │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌─────────┐ ┌──────────┐      │  │
-│  │  │ VS Code  │ │  Chrome  │ │ Docker  │ │ Desktop  │      │  │
-│  │  │          │ │  Firefox │ │         │ │   Apps   │      │  │
-│  │  └──────────┘ └──────────┘ └─────────┘ └──────────┘      │  │
-│  │                                                          │  │
-│  │  L2TP Client: Routes VPN_APPS via run_vpn.sh             │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph CLIENT[" CLIENT DEVICES "]
+        CF["Cloudflare One Agent<br/>SSH/VNC/WARP"]
+        SSHC["SSH Clients<br/>Direct"]
+    end
 
-ACCESS METHODS & PORTS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. SSH/VNC Access (via Cloudflare):
+    subgraph EDGE[" CLOUDFLARE EDGE NETWORK "]
+        CFE["Cloudflare<br/>Edge Network<br/>Global CDN"]
+    end
+
+    subgraph VPS[" VPS SERVER "]
+        direction TB
+        CFD["cloudflared<br/>SSH/VNC Tunnel"]
+        XRAY["Xray Reality VPN<br/>VLESS + Reality<br/>Port: 2053"]
+        VNC["VNC Sessions<br/>:5910, :5911, ..."]
+        L2TP["L2TP/IPsec VPN<br/>500, 1701, 4500"]
+    end
+
+    subgraph FARM[" SSH FARM - Docker Containers "]
+        SSH1["SSH user1<br/>Port: 8080<br/>Tunneling ✓"]
+        SSH2["SSH user2<br/>Port: 8880<br/>Tunneling ✓"]
+        SSH3["More servers<br/>2082, 2086, 2095<br/>9443..."]
+    end
+
+    subgraph DESKTOP[" VNC DESKTOP ENVIRONMENT "]
+        VSCODE["VS Code"]
+        CHROME["Chrome/Firefox"]
+        DOCKER["Docker"]
+        APPS["Desktop Apps"]
+        ROUTE["L2TP Client<br/>Routes VPN_APPS"]
+    end
+
+    CF -->|Cloudflare Edge| CFE
+    SSHC -->|Direct SSH| VPS
+    CFE -->|Secure Tunnel| CFD
+    CFD --> VNC
+    CFD --> L2TP
+    XRAY --> FARM
+    VNC --> DESKTOP
+    FARM --- SSH1
+    FARM --- SSH2
+    FARM --- SSH3
+
+    style CLIENT fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+    style EDGE fill:#fff4e6,stroke:#e65100,stroke-width:3px
+    style VPS fill:#f3e5f5,stroke:#4a148c,stroke-width:3px
+    style FARM fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style DESKTOP fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+```
+
+
+## ACCESS METHODS & PORTS:
+- SSH/VNC Access (via Cloudflare):
    → Client → Cloudflare Edge → cloudflared → localhost:22 (SSH) / :5910+ (VNC)
    
-2. Xray Reality VPN (Anti-DPI):
+- Xray Reality VPN (Anti-DPI):
    → Port 2053 (TCP) → VLESS + Reality → Bypasses DPI filtering
    
-3. L2TP/IPsec VPN Server:
+- L2TP/IPsec VPN Server:
    → Ports 500 (UDP), 1701 (UDP), 4500 (UDP) → App-specific routing in VNC
    
-4. SSH Farm (Direct Access - SSH Tunneling):
-   → Ports 8080, 8880, 2052, 2082, 2086, 2095, 9443, 2083, 2087, 2096...
-   → SSH tunneling enabled (AllowTcpForwarding, PermitTunnel)
-   → Use with NekoBox, OpenVPN, or any SSH tunnel-based VPN
-   → Users: sshfarm_user1, sshfarm_user2, sshfarm_user3...
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+- SSH Farm (Direct Access - SSH Tunneling):
+   - Ports 8080, 8880, 2052, 2082, 2086, 2095, 9443, 2083, 2087, 2096...
+   - SSH tunneling enabled (AllowTcpForwarding, PermitTunnel)
+   - Use with NekoBox, OpenVPN, or any SSH tunnel-based VPN
+   - Users: sshfarm_user1, sshfarm_user2, sshfarm_user3...
 
 ---
 
