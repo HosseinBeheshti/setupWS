@@ -150,6 +150,7 @@ Configure SSH access through Cloudflare Access:
      - Subdomain: `ssh`
      - Domain: Select your team domain from dropdown
      - Path: Leave empty
+   - **Browser rendering settings**: select `SSH` for Browser rendering.
    - Click **Next**
 
 5. Add an Access policy:
