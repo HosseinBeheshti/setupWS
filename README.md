@@ -171,7 +171,7 @@ If you want to access VNC through Cloudflare (recommended):
 
 **For each VNC user, create a separate application:**
 
-1. Go to: **Access → Applications**
+1. Go to: **Access controls → Applications**
 2. Click **Add an application**
 3. Select **Self-hosted**
 4. Configure the application:
@@ -180,6 +180,7 @@ If you want to access VNC through Cloudflare (recommended):
    - **Application domain**:
      - Subdomain: `vnc1` (use vnc2, vnc3 for additional users)
      - Domain: Select your team domain
+   - **Browser rendering settings**: select `VNC` for Browser rendering.
    - Click **Next**
 
 5. Add an Access policy:
