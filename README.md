@@ -13,8 +13,11 @@ This setup provides comprehensive secure remote access:
 - **SSH Farm**: Multiple SSH servers with SSH tunneling support (for VPN apps like NekoBox)
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
+<div style="background-color: #E3F2FD; padding: 20px; border-radius: 5px;">
+
 ```mermaid
-flowchart TB
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#fff', 'lineColor':'#006400', 'primaryTextColor':'#000', 'edgeLabelBackground':'#E0E0E0'}}}%%
+flowchart-elk
     subgraph CLIENT[" CLIENT DEVICES "]
         CF["Cloudflare One Agent<br/>SSH/VNC/WARP"]
         SSHC["SSH Clients<br/>Direct"]
@@ -44,11 +47,13 @@ flowchart TB
     CFE -->|Secure Tunnel| CFD
     CFD --> VNC_BOX
 
-    style CLIENT fill:#e1f5ff,stroke:#01579b,stroke-width:3px,color:#000
-    style EDGE fill:#fff4e6,stroke:#e65100,stroke-width:3px,color:#000
-    style VPS fill:#f3e5f5,stroke:#4a148c,stroke-width:3px,color:#000
-    style VNC_BOX fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
+    style CLIENT fill:#e1f5ff,stroke:#01579b,color:#000
+    style EDGE fill:#fff4e6,stroke:#e65100,color:#000
+    style VPS fill:#f3e5f5,stroke:#4a148c,color:#000
+    style VNC_BOX fill:#fce4ec,stroke:#880e4f,color:#000
 ```
+
+</div>
 
 
 ## ACCESS METHODS & PORTS:
@@ -314,6 +319,8 @@ cloudflared access tcp --hostname vnc1.yourdomain.org --url localhost:5900
 # In another terminal, connect VNC client to localhost:5900
 ```
 
+Or use web application `https://vnc1.yourdomain.org`
+
 **Direct Connection:**
 
 **Not Available** - Direct VNC access is blocked by firewall for security. You must use Cloudflare Access.
@@ -330,6 +337,8 @@ cloudflared access tcp --hostname vnc1.yourdomain.org --url localhost:5900
     ```bash
     ssh -p 2222 username@localhost
     ```
+    Or use web application `https://ssh.yourdomain.org`
+
 **Direct SSH:**
 
 **Not Available** - Direct SSH access is blocked by firewall for security. You must use Cloudflare Access.
