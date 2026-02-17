@@ -144,7 +144,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y ufw
 print_message "✓ All packages installed successfully"
 
 # ============================================================
-# Step 2: Install Docker (from setup_vnc.sh embedded install)
+# Step 2: Install Docker
 # ============================================================
 print_header "Step 2/6: Installing Docker"
 
@@ -166,7 +166,7 @@ else
 fi
 
 # ============================================================
-# Step 3: Install VS Code (from setup_vnc.sh embedded install)
+# Step 3: Install VS Code
 # ============================================================
 print_header "Step 3/7: Installing VS Code"
 
@@ -186,7 +186,7 @@ else
 fi
 
 # ============================================================
-# Step 4: Install Google Chrome (from setup_vnc.sh embedded install)
+# Step 4: Install Google Chrome 
 # ============================================================
 print_header "Step 4/7: Installing Google Chrome"
 
