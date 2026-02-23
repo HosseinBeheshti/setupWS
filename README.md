@@ -238,6 +238,82 @@ Now connect your tunnel to the applications you created:
 
 ---
 
+### 1.7 Route All Phone Traffic Through VPS via Cloudflare Tunnel
+
+Route all traffic from your phone through a VPS using Cloudflare Zero Trust + WARP, so your phone's public IP appears as the VPS IP.
+
+
+#### 1.7.1 — Enable IP Forwarding & NAT on VPS
+
+This allows traffic arriving through the tunnel to exit through the VPS's network interface.
+
+```bash
+# Enable IPv4 and IPv6 forwarding
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv6.conf.all.forwarding=1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# IPv4 NAT masquerade rule (replace eth0 with your interface)
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# IPv6 NAT masquerade rule
+sudo ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# Make both rules persistent across reboots
+sudo apt install iptables-persistent -y
+sudo netfilter-persistent save
+```
+
+> **Find your network interface:** Run `ip a` and look for the interface with your VPS public IP (commonly `eth0`, `ens3`, or `enp1s0`).
+
+---
+
+#### 1.7.2 — Configure Split Tunnels (Route All Traffic)
+
+By default, Cloudflare excludes many IPs. Remove all exclusions to force all traffic through the tunnel.
+
+1. Go to: **Team & Resources → Devices → Device profiles**
+2. Under **General profiles**, click the **three dots** next to the **Default** profile → **Configure**
+3. Scroll down to **Split Tunnels**
+4. Select **Exclude IPs and domains**
+5. Click **Manage**
+6. **Select and delete all existing entries**
+
+> Deleting all entries means no traffic is excluded — everything routes through WARP and your VPS tunnel.
+
+---
+
+#### 1.7.3 — Add CIDR Routes to the Tunnel
+
+1. Go to **Networks → Routers → CIDR**
+2. Click **Add a router**
+3. Fill in:
+   - **CIDR:** `0.0.0.0/0`
+   - **Description:** `Route all IPv4 traffic`
+   - **Tunnel:** `vps-access` *(your tunnel name)*
+4. Click **Add a router**
+5. Fill in:
+   - **CIDR:** `::/0`
+   - **Description:** `Route all IPv6 traffic`
+6. Save both
+4. Save
+
+---
+
+#### 1.7.4 — Bypass VPS IP in Split Tunnels (Optional but Recommended)
+
+Prevent routing loops by excluding your VPS's own IP from the tunnel.
+
+1. Go back to **Split Tunnels → Manage**
+2. Click **Add an entry**
+3. Fill in:
+   - **Selector:** IP Address
+   - **Value:** `<your_vps_ip_address>`
+   - **Description:** `Bypass VPS`
+4. Save
+
+---
+
 ## Part 2: VPS Server Setup
 
 ### 2.1 Prepare VPS Configuration
