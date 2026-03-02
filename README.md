@@ -390,7 +390,7 @@ sudo apt-get update && sudo apt-get install cloudflared
 ```bash
 # Install cloudflared on client machine
 # Create local tunnel to VNC
-cloudflared access tcp --hostname vnc1.yourdomain.org --url localhost:5900
+cloudflared access tcp --hostname vnc1.yourdomain.org --url localhost:<vnc_user_port>
 
 # In another terminal, connect VNC client to localhost:5900
 ```
@@ -411,7 +411,8 @@ Or use web application `https://vnc1.yourdomain.org`
     ```
 
     ```bash
-    ssh -p 2222 username@localhost
+    # Open SOCKS5 socket on port 1080 on the client's PC
+    ssh -D 1080 -N -p 2222 <username>@localhost
     ```
     Or use web application `https://ssh.yourdomain.org`
 
