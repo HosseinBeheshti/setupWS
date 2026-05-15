@@ -66,8 +66,8 @@ print_info "Generating Reality protocol keys..."
 # Generate both private and public keys together
 if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ "$XRAY_REALITY_PRIVATE_KEY" = "<auto_generated_private_key>" ] || [ -z "$XRAY_REALITY_PUBLIC_KEY" ] || [ "$XRAY_REALITY_PUBLIC_KEY" = "<auto_generated_public_key>" ]; then
     KEY_OUTPUT=$(xray x25519 2>&1)
-    XRAY_REALITY_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | awk '/PrivateKey:/{print $2}')
-    XRAY_REALITY_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | awk '/Password:/{print $2}')
+    XRAY_REALITY_PRIVATE_KEY=$(echo "$KEY_OUTPUT" | awk '/PrivateKey:/{print $NF}')
+    XRAY_REALITY_PUBLIC_KEY=$(echo "$KEY_OUTPUT" | awk '/Password/{print $NF}')
     
     if [ -z "$XRAY_REALITY_PRIVATE_KEY" ] || [ -z "$XRAY_REALITY_PUBLIC_KEY" ]; then
         print_error "Failed to generate keys. xray x25519 output:"

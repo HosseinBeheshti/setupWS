@@ -110,6 +110,10 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     tigervnc-standalone-server \
     firefox
 
+# Remove packages pulled by xfce4-goodies that fatally crash in VNC (no LightDM/logind/DPMS)
+print_message "Removing VNC-incompatible packages..."
+apt-get remove -y light-locker xfce4-screensaver xiccd xfce4-power-manager 2>/dev/null || true
+
 # L2TP/IPsec packages (always installed for VPN_APPS routing)
 print_message "Installing L2TP/IPsec VPN client packages..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y \

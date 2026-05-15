@@ -13,47 +13,53 @@ This setup provides comprehensive secure remote access:
 - **SSH Farm**: Multiple SSH servers with SSH tunneling support (for VPN apps like NekoBox)
 - **L2TP/IPsec VPN**: Application-specific routing for VPN_APPS in VNC sessions
 
-<div style="background-color: #E3F2FD; padding: 20px; border-radius: 5px;">
-
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#fff', 'lineColor':'#006400', 'primaryTextColor':'#000', 'edgeLabelBackground':'#E0E0E0'}}}%%
-flowchart-elk
-    subgraph CLIENT[" CLIENT DEVICES "]
-        CF["Cloudflare One Agent<br/>SSH/VNC/WARP"]
-        SSHC["SSH Clients<br/>Direct"]
-        XRAYC["XRAY Clients"]
-    end
+architecture-beta
+    group client(internet)[Client Devices]
+    group cfedge(cloud)[Cloudflare Edge]
+    group vps(server)[VPS Server]
+    group vncd(server)[VNC Desktop] in vps
 
-    subgraph EDGE[" "]
-        CFE["Cloudflare<br/>Edge Network<br/>Global CDN"]
-    end
+    service cf_agent(internet)[CF One Agent] in client
+    service ssh_client(internet)[SSH Clients] in client
+    service xray_client(internet)[Xray Clients] in client
 
-    subgraph VPS[" VPS SERVER "]
-        direction TB
-        CFD["cloudflared<br/>SSH/VNC Tunnel"]
-        XRAY["Xray Reality VPN<br/>VLESS + Reality<br/>Port: 2053"]
-        FARM[" SSH FARM - Docker Containers<br/>sshfarm_user1:Port1(8080)<br/>...<br/><br/>Tunneling "]
-        VNC_BOX[" VNC DESKTOP "]
-    end
+    service cfe(cloud)[Cloudflare CDN] in cfedge
 
-    subgraph VNC_BOX[" VNC DESKTOP "]
-        direction LR
-        VSCODE["VS Code"] --- CHROME["Chrome/Firefox"] --- APPS["..."] --- L2TP["L2TP/IPsec VPN<br/>500, 1701, 4500"]
-    end
+    service sshfarm(server)[SSH Farm] in vps
+    service xray(server)[Xray VPN] in vps
+    service cloudflared(server)[cloudflared] in vps
 
-    CF -->|Cloudflare Edge| CFE
-    SSHC -->|Direct SSH| FARM
-    XRAYC -->|VLESS+REALITY| XRAY
-    CFE -->|Secure Tunnel| CFD
-    CFD --> VNC_BOX
+    group inet(internet)[Internet]
+    service inet1(internet)[Internet] in inet
+    service inet2(internet)[Internet] in inet
+    service inet3(internet)[Internet] in inet
+    service inet4(internet)[Internet] in inet
+    service l2tp_pc(server)[L2TP PC] in inet
 
-    style CLIENT fill:#e1f5ff,stroke:#01579b,color:#000
-    style EDGE fill:#fff4e6,stroke:#e65100,color:#000
-    style VPS fill:#f3e5f5,stroke:#4a148c,color:#000
-    style VNC_BOX fill:#fce4ec,stroke:#880e4f,color:#000
+    service vscode(server)[VS Code] in vncd
+    service chrome(internet)[Browser] in vncd
+    service l2tp(server)[L2TP VPN] in vncd
+
+    cf_agent:R -- L:cfe
+    cfe:R -- L:cloudflared
+    ssh_client:R -- L:sshfarm
+    xray_client:R -- L:xray
+    sshfarm:R -- L:inet1
+    xray:R -- L:inet2
+    cloudflared:R -- L:vscode
+    cloudflared:R -- L:l2tp
+    cloudflared:R -- L:chrome
+    vscode:R -- L:inet3
+    l2tp:R -- L:l2tp_pc
+    chrome:R -- L:inet4
+
+    inet3:B -- T:l2tp_pc
+    inet2:B -- T:inet1
+    inet3:B -- T:inet2
+    inet4:B -- T:inet3
+    l2tp_pc:B -- T:inet4
 ```
-
-</div>
 
 
 ## ACCESS METHODS & PORTS:
